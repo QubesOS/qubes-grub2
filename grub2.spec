@@ -4,6 +4,563 @@
 %undefine _missing_build_ids_terminate_build
 %global _configure_gnuconfig_hack 0
 
+### begin grub.macros
+# vim:filetype=spec
+# Modules always contain just 32-bit code
+%global _libdir %{_exec_prefix}/lib
+%global _binaries_in_noarch_packages_terminate_build 0
+#%%undefine _missing_build_ids_terminate_build
+%{expand:%%{!?buildsubdir:%%global buildsubdir grub-%{tarversion}}}
+%{expand:%%{!?_licensedir:%%global license %%%%doc}}
+
+%global _configure ../configure
+
+%if %{?_with_ccache: 1}%{?!_with_ccache: 0}
+%global cc_equals CC=/usr/%{_lib}/ccache/gcc
+%else
+%global cc_equals %{nil}
+%endif
+
+%global cflags_sed						\\\
+	sed							\\\
+		-e 's/-O. //g'					\\\
+		-e 's/-g /-g3 /g'				\\\
+		-e 's/-fplugin=annobin //g'			\\\
+		-e 's,-specs=/usr/lib/rpm/redhat/redhat-annobin-cc1 ,,g' \\\
+		-e 's/-fstack-protector[[:alpha:]-]\\+//g'	\\\
+		-e 's/-Wp,-D_FORTIFY_SOURCE=[[:digit:]]\\+//g'	\\\
+		-e 's/--param=ssp-buffer-size=4//g'		\\\
+		-e 's/-mregparm=3/-mregparm=4/g'		\\\
+		-e 's/-fexceptions//g'				\\\
+		-e 's/-fasynchronous-unwind-tables//g'		\\\
+		-e 's/^/ -fno-strict-aliasing /'		\\\
+		%{nil}
+
+%global host_cflags %{expand:%%(echo %{optflags} | %{cflags_sed})}
+%global target_cflags %{expand:%%(echo %{optflags} | %{cflags_sed})}
+
+%global legacy_target_cflags					\\\
+	%{expand:%%(echo %{target_cflags} | 			\\\
+	%{cflags_sed}						\\\
+		-e 's/-m64//g'					\\\
+		-e 's/-mcpu=power[[:alnum:]]\\+/-mcpu=power6/g'	\\\
+	)}
+%global legacy_host_cflags					\\\
+	%{expand:%%(echo %{host_cflags} | 			\\\
+	%{cflags_sed}						\\\
+		-e 's/-m64//g'					\\\
+		-e 's/-mcpu=power[[:alnum:]]\\+/-mcpu=power6/g'	\\\
+	)}
+
+%global efi_host_cflags %{expand:%%(echo %{host_cflags})}
+%global efi_target_cflags %{expand:%%(echo %{target_cflags})}
+
+%global with_efi_arch 0
+%global with_alt_efi_arch 0
+%global with_legacy_arch 0
+%global grubefiarch %{nil}
+%global grublegacyarch %{nil}
+
+# sparc is always compiled 64 bit
+%ifarch %{sparc}
+%global target_cpu_name sparc64
+%global _target_platform %{target_cpu_name}-%{_vendor}-%{_target_os}%{?_gnu}
+%global legacy_target_cpu_name %{_arch}
+%global legacy_package_arch ieee1275
+%global platform ieee1275
+%endif
+# ppc is always compiled 64 bit
+%ifarch ppc ppc64 ppc64le
+%global target_cpu_name %{_arch}
+%global legacy_target_cpu_name powerpc
+%global legacy_package_arch %{_arch}
+%global legacy_grub_dir powerpc-ieee1275
+%global _target_platform %{target_cpu_name}-%{_vendor}-%{_target_os}%{?_gnu}
+%global platform ieee1275
+%endif
+
+
+%global efi_only aarch64 %{arm}
+%global efi_arch x86_64 ia64 %{efi_only}
+%ifarch %{efi_arch}
+%global with_efi_arch 1
+%else
+%global with_efi_arch 0
+%endif
+%ifarch %{efi_only}
+%global with_efi_only 1
+%else
+%global with_efi_only 0
+%endif
+%{!?with_efi_arch:%global without_efi_arch 0}
+%{?with_efi_arch:%global without_efi_arch 1}
+%{!?with_efi_only:%global without_efi_only 0}
+%{?with_efi_only:%global without_efi_only 1}
+
+### fixme
+%ifarch aarch64 %{arm}
+%global efi_modules " "
+%else
+%global efi_modules " backtrace chain usb usbserial_common usbserial_pl2303 usbserial_ftdi usbserial_usbdebug "
+%endif
+
+%ifarch aarch64 %{arm}
+%global legacy_provides -l
+%endif
+
+%ifarch %{ix86}
+%global efiarch ia32
+%global target_cpu_name i386
+%global grub_target_name i386-efi
+%global package_arch efi-ia32
+
+%global legacy_target_cpu_name i386
+%global legacy_package_arch pc
+%global platform pc
+%endif
+
+%ifarch x86_64
+%global efiarch x64
+%global target_cpu_name %{_arch}
+%global grub_target_name %{_arch}-efi
+%global package_arch efi-x64
+
+%global legacy_target_cpu_name i386
+%global legacy_package_arch pc
+%global platform pc
+
+%global alt_efi_arch ia32
+%global alt_target_cpu_name i386
+%global alt_grub_target_name i386-efi
+%global alt_platform efi
+%global alt_package_arch efi-ia32
+
+%global alt_efi_host_cflags %{expand:%%(echo %{efi_host_cflags})}
+%global alt_efi_target_cflags					\\\
+	%{expand:%%(echo %{target_cflags} |			\\\
+	%{cflags_sed}						\\\
+		-e 's/-m64//g'					\\\
+	)}
+%endif
+
+%ifarch aarch64
+%global efiarch aa64
+%global target_cpu_name aarch64
+%global grub_target_name arm64-efi
+%global package_arch efi-aa64
+%endif
+
+%ifarch %{arm}
+%global efiarch arm
+%global target_cpu_name arm
+%global grub_target_name arm-efi
+%global package_arch efi-arm
+%global efi_target_cflags						\\\
+	%{expand:%%(echo %{optflags} |					\\\
+	%{cflags_sed}							\\\
+		-e 's/-march=armv7-a[[:alnum:]+-]*/&+nofp/g'		\\\
+		-e 's/-mfpu=[[:alnum:]-]\\+//g'				\\\
+		-e 's/-mfloat-abi=[[:alpha:]]\\+/-mfloat-abi=soft/g'	\\\
+	)}
+%endif
+
+%global _target_platform %{target_cpu_name}-%{_vendor}-%{_target_os}%{?_gnu}
+%global _alt_target_platform %{alt_target_cpu_name}-%{_vendor}-%{_target_os}%{?_gnu}
+
+%ifarch %{efi_arch}
+%global with_efi_arch 1
+%global grubefiname grub%{efiarch}.efi
+%global grubeficdname gcd%{efiarch}.efi
+%global grubefiarch %{target_cpu_name}-efi
+%ifarch %{ix86}
+%global with_efi_modules 0
+%global without_efi_modules 1
+%else
+%global with_efi_modules 1
+%global without_efi_modules 0
+%endif
+%endif
+
+%if 0%{?alt_efi_arch:1}
+%global with_alt_efi_arch 1
+%global grubaltefiname grub%{alt_efi_arch}.efi
+%global grubalteficdname gcd%{alt_efi_arch}.efi
+%global grubaltefiarch %{alt_target_cpu_name}-efi
+%endif
+
+%ifnarch %{efi_only}
+%global with_legacy_arch 1
+%global grublegacyarch %{legacy_target_cpu_name}-%{platform}
+%global moduledir %{legacy_target_cpu_name}-%{platform}
+%endif
+
+%global evr %{epoch}:%{version}-%{release}
+
+%ifarch x86_64
+%global with_efi_common 1
+%global with_legacy_modules 0
+%global with_legacy_common 0
+%else
+%global with_efi_common 0
+%global with_legacy_common 1
+%global with_legacy_modules 1
+%endif
+
+%define define_legacy_variant()						\
+%{expand:%%package %%{1}}						\
+Summary:	Bootloader with support for Linux, Multiboot, and more	\
+Group:		System Environment/Base					\
+Provides:	%{name} = %{evr}					\
+Obsoletes:	%{name} < %{evr}					\
+Requires:	%{name}-common = %{evr}					\
+Requires:	%{name}-tools-minimal = %{evr}				\
+Requires:	%{name}-%{1}-modules = %{evr}				\
+Requires:	gettext which file					\
+Requires:	%{name}-tools-extra = %{evr}				\
+Requires:	%{name}-tools = %{evr}					\
+Requires(pre):	dracut							\
+Requires(post): dracut							\
+%{expand:%%description %%{1}}						\
+%{desc}									\
+This subpackage provides support for %%{1} systems.			\
+									\
+%{expand:%%{?!buildsubdir:%%define buildsubdir grub-%%{1}-%{tarversion}}}\
+%{expand:%%if 0%%{with_legacy_modules}					\
+%%package %%{1}-modules							\
+Summary:	Modules used to build custom grub images		\
+Group:		System Environment/Base					\
+BuildArch:	noarch							\
+Requires:	%%{name}-common = %%{evr}				\
+%%description %%{1}-modules						\
+%%{desc}								\
+This subpackage provides support for rebuilding your own grub.efi.	\
+%%endif									\
+}									\
+									\
+%{expand:%%{?!buildsubdir:%%define buildsubdir grub-%%{1}-%{tarversion}}}\
+%{expand:%%package %%{1}-tools}						\
+Summary:	Support tools for GRUB.					\
+Group:		System Environment/Base					\
+Requires:	gettext os-prober which file system-logos		\
+Requires:	%{name}-common = %{evr}					\
+Requires:	%{name}-tools-minimal = %{evr}				\
+Requires:	os-prober >= 1.58-11					\
+Requires:	gettext which file					\
+									\
+%{expand:%%description %%{1}-tools}					\
+%{desc}									\
+This subpackage provides tools for support of %%{1} platforms.		\
+%{nil}
+
+%define define_efi_variant(o)						\
+%{expand:%%package %{1}}						\
+Summary:	GRUB for EFI systems.					\
+Group:		System Environment/Base					\
+Requires:	efi-filesystem						\
+Requires:	%{name}-common = %{evr}					\
+Requires:	%{name}-tools-minimal >= %{evr}				\
+Requires:	%{name}-tools-extra = %{evr}				\
+Requires:	%{name}-tools = %{evr}					\
+Provides:	%{name}-efi = %{evr}					\
+%{?legacy_provides:Provides:	%{name} = %{evr}}			\
+%{-o:Obsoletes:	%{name}-efi < %{evr}}					\
+									\
+%{expand:%%description %{1}}						\
+%{desc}									\
+This subpackage provides support for %{1} systems.			\
+									\
+%{expand:%%{?!buildsubdir:%%define buildsubdir grub-%{1}-%{tarversion}}}\
+%{expand:%if 0%{?with_efi_modules}					\
+%{expand:%%package %{1}-modules}					\
+Summary:	Modules used to build custom grub.efi images		\
+Group:		System Environment/Base					\
+BuildArch:	noarch							\
+Requires:	%{name}-common = %{evr}					\
+Provides:	%{name}-efi-modules = %{evr}				\
+Obsoletes:	%{name}-efi-modules < %{evr}				\
+%{expand:%%description %{1}-modules}					\
+%{desc}									\
+This subpackage provides support for rebuilding your own grub.efi.	\
+%endif}									\
+									\
+%{expand:%%package %{1}-cdboot}						\
+Summary:	Files used to boot removeable media with EFI		\
+Group:		System Environment/Base					\
+Requires:	%{name}-common = %{evr}					\
+Provides:	%{name}-efi-cdboot = %{evr}				\
+%{expand:%%description %{1}-cdboot}					\
+%{desc}									\
+This subpackage provides optional components of grub used with removeable media on %{1} systems.\
+%{nil}
+
+%global do_common_setup()					\
+%setup -q -n grub-%{tarversion}					\
+rm -fv docs/*.info						\
+cp %{SOURCE6} .gitignore					\
+cp %{SOURCE8} ./grub-core/tests/strtoull_test.c			\
+git init							\
+echo '![[:digit:]][[:digit:]]_*.in' > util/grub.d/.gitignore	\
+echo '!*.[[:digit:]]' > util/.gitignore				\
+echo '!config.h' > include/grub/emu/.gitignore			\
+git config user.email "%{name}-owner@fedoraproject.org"		\
+git config user.name "Fedora Ninjas"				\
+git config gc.auto 0						\
+rm -f configure							\
+git add .							\
+git commit -a -q -m "%{tarversion} baseline."			\
+git apply --index --whitespace=nowarn %{SOURCE3}		\
+git commit -a -q -m "%{tarversion} master."			\
+git am --whitespace=nowarn %%{patches} </dev/null		\
+autoreconf -vi							\
+git add .							\
+git commit -a -q -m "autoreconf"				\
+autoconf							\
+PYTHON=python3 ./autogen.sh					\
+%{nil}
+
+%define do_efi_configure()					\
+%configure							\\\
+	%{cc_equals}						\\\
+	HOST_CFLAGS="%{3} -I$(pwd)"				\\\
+	HOST_CPPFLAGS="${CPPFLAGS} -I$(pwd)"			\\\
+	TARGET_CFLAGS="%{2} -I$(pwd)"				\\\
+	TARGET_CPPFLAGS="${CPPFLAGS} -I$(pwd)"			\\\
+	TARGET_LDFLAGS=-static					\\\
+	--with-platform=efi					\\\
+	--with-utils=host					\\\
+	--target=%{1}						\\\
+	--with-grubdir=%{name}					\\\
+	--program-transform-name=s,grub,%{name},		\\\
+	--disable-grub-mount					\\\
+	--disable-werror || ( cat config.log ; exit 1 )		\
+git add .							\
+git commit -m "After efi configure"				\
+%{nil}
+
+%define do_efi_build_modules()					\
+make %{?_smp_mflags} ascii.h widthspec.h			\
+make %{?_smp_mflags} -C grub-core				\
+%{nil}
+
+%define do_efi_build_all()					\
+make %{?_smp_mflags}						\
+%{nil}
+
+%define do_efi_link_utils()					\
+for x in grub-mkimage ; do					\\\
+	ln ../grub-%{1}-%{tarversion}/${x} ./ ;			\\\
+done								\
+%{nil}
+
+%ifarch x86_64 aarch64 %{arm}
+%define mkimage()						\
+%{4}./grub-mkimage -O %{1} -o %{2}.orig				\\\
+	-p /EFI/%{efi_vendor} -d grub-core ${GRUB_MODULES}	\
+%{4}./grub-mkimage -O %{1} -o %{3}.orig				\\\
+	-p /EFI/BOOT -d grub-core ${GRUB_MODULES}		\
+%{expand:%%{pesign -s -i %%{2}.orig -o %%{2} -a %%{5} -c %%{6} -n %%{7}}}	\
+%{expand:%%{pesign -s -i %%{3}.orig -o %%{3} -a %%{5} -c %%{6} -n %%{7}}}	\
+%{nil}
+%else
+%define mkimage()						\
+%{4}./grub-mkimage -O %{1} -o %{2}				\\\
+	-p /EFI/%{efi_vendor} -d grub-core ${GRUB_MODULES}	\
+%{4}./grub-mkimage -O %{1} -o %{3}				\\\
+	-p /EFI/BOOT -d grub-core ${GRUB_MODULES}		\
+%{nil}
+%endif
+
+%define do_efi_build_images()					\
+GRUB_MODULES="	all_video boot blscfg btrfs			\\\
+		cat configfile					\\\
+		echo efi_netfs efifwsetup efinet ext2		\\\
+		fat font gfxmenu gfxterm gzio			\\\
+		halt hfsplus http increment iso9660 jpeg	\\\
+		loadenv loopback linux lvm lsefi lsefimmap	\\\
+		mdraid09 mdraid1x minicmd net			\\\
+		normal part_apple part_msdos part_gpt		\\\
+		password_pbkdf2 png reboot			\\\
+		search search_fs_uuid search_fs_file		\\\
+		search_label serial sleep syslinuxcfg test tftp	\\\
+		version video xfs"				\
+GRUB_MODULES+=%{efi_modules}					\
+%{expand:%%{mkimage %{1} %{2} %{3} %{4}}}			\
+%{nil}
+
+%define do_primary_efi_build()					\
+cd grub-%{1}-%{tarversion}					\
+%{expand:%%do_efi_configure %%{4} %%{5} %%{6}}			\
+%do_efi_build_all						\
+%{expand:%%do_efi_build_images %{grub_target_name} %{2} %{3} ./ } \
+cd ..								\
+%{nil}
+
+%define do_alt_efi_build()					\
+cd grub-%{1}-%{tarversion}					\
+%{expand:%%do_efi_configure %%{4} %%{5} %%{6}}			\
+%do_efi_build_modules						\
+%{expand:%%do_efi_link_utils %{grubefiarch}}			\
+%{expand:%%do_efi_build_images %{alt_grub_target_name} %{2} %{3} ../grub-%{grubefiarch}-%{tarversion}/ } \
+cd ..								\
+%{nil}
+
+%define do_legacy_build()					\
+cd grub-%{1}-%{tarversion}					\
+%configure							\\\
+	%{cc_equals}						\\\
+	HOST_CFLAGS="%{legacy_host_cflags} -I$(pwd)"		\\\
+	TARGET_CFLAGS="%{legacy_target_cflags} -I$(pwd)"	\\\
+	TARGET_LDFLAGS=-static					\\\
+	--with-platform=%{platform}				\\\
+	--with-utils=host					\\\
+	--target=%{_target_platform}				\\\
+	--with-grubdir=%{name}					\\\
+	--program-transform-name=s,grub,%{name},		\\\
+	--disable-grub-mount					\\\
+	--disable-werror || ( cat config.log ; exit 1 )		\
+git add .							\
+git commit -m "After legacy configure"					\
+make %{?_smp_mflags}						\
+cd ..								\
+%{nil}
+
+%define do_alt_efi_install()					\
+cd grub-%{1}-%{tarversion}					\
+install -d -m 755 $RPM_BUILD_ROOT/usr/lib/grub/%{grubaltefiarch}/ \
+find . '(' -iname gdb_grub					\\\
+	-o -iname kernel.exec					\\\
+	-o -iname kernel.img					\\\
+	-o -iname config.h					\\\
+	-o -iname gmodule.pl					\\\
+	-o -iname modinfo.sh					\\\
+	-o -iname '*.lst'					\\\
+	-o -iname '*.mod'					\\\
+	')'							\\\
+	-exec cp {} $RPM_BUILD_ROOT/usr/lib/grub/%{grubaltefiarch}/ \\\; \
+find $RPM_BUILD_ROOT -type f -iname "*.mod*" -exec chmod a-x {} '\;'	\
+install -m 700 %{2} $RPM_BUILD_ROOT%{efi_esp_dir}/%{2}	\
+install -m 700 %{3} $RPM_BUILD_ROOT%{efi_esp_dir}/%{3} \
+cd ..								\
+%{nil}
+
+%define do_efi_install()					\
+cd grub-%{1}-%{tarversion}					\
+make DESTDIR=$RPM_BUILD_ROOT install				\
+if [ -f $RPM_BUILD_ROOT%{_infodir}/grub.info ]; then		\
+	rm -f $RPM_BUILD_ROOT%{_infodir}/grub.info		\
+fi								\
+if [ -f $RPM_BUILD_ROOT%{_infodir}/grub-dev.info ]; then	\
+	rm -f $RPM_BUILD_ROOT%{_infodir}/grub-dev.info		\
+fi								\
+find $RPM_BUILD_ROOT -iname "*.module" -exec chmod a-x {} '\;'	\
+touch $RPM_BUILD_ROOT%{efi_esp_dir}/grub.cfg			\
+ln -sf ..%{efi_esp_dir}/grub.cfg				\\\
+	$RPM_BUILD_ROOT%{_sysconfdir}/%{name}-efi.cfg		\
+install -m 700 %{2} $RPM_BUILD_ROOT%{efi_esp_dir}/%{2}		\
+install -m 700 %{3} $RPM_BUILD_ROOT%{efi_esp_dir}/%{3}		\
+install -D -m 700 unicode.pf2					\\\
+	$RPM_BUILD_ROOT%{efi_esp_dir}/fonts/unicode.pf2		\
+${RPM_BUILD_ROOT}/%{_bindir}/%{name}-editenv			\\\
+	${RPM_BUILD_ROOT}%{efi_esp_dir}/grubenv create		\
+ln -sf ../efi/EFI/%{efi_vendor}/grubenv				\\\
+	$RPM_BUILD_ROOT/boot/grub2/grubenv			\
+cd ..								\
+%{nil}
+
+%define do_legacy_install()					\
+cd grub-%{1}-%{tarversion}					\
+make DESTDIR=$RPM_BUILD_ROOT install				\
+if [ -f $RPM_BUILD_ROOT%{_infodir}/grub.info ]; then		\
+	rm -f $RPM_BUILD_ROOT%{_infodir}/grub.info		\
+fi								\
+if [ -f $RPM_BUILD_ROOT%{_infodir}/grub-dev.info ]; then	\
+	rm -f $RPM_BUILD_ROOT%{_infodir}/grub-dev.info		\
+fi								\
+ln -s ../boot/%{name}/grub.cfg					\\\
+	${RPM_BUILD_ROOT}%{_sysconfdir}/grub2.cfg		\
+if [ -f $RPM_BUILD_ROOT/%{_libdir}/grub/%{1}/grub2.chrp ]; then \
+	mv $RPM_BUILD_ROOT/%{_libdir}/grub/%{1}/grub2.chrp	\\\
+	   $RPM_BUILD_ROOT/%{_libdir}/grub/%{1}/grub.chrp	\
+fi								\
+if [ %{3} -eq 0 ]; then						\
+	${RPM_BUILD_ROOT}/%{_bindir}/%{name}-editenv		\\\
+		${RPM_BUILD_ROOT}/boot/%{name}/grubenv create	\
+fi								\
+cd ..								\
+%{nil}
+
+%define do_common_install()					\
+install -d -m 0755 						\\\
+	$RPM_BUILD_ROOT%{_datarootdir}/locale/en\@quot		\\\
+	$RPM_BUILD_ROOT%{_datarootdir}/locale/en		\\\
+	$RPM_BUILD_ROOT%{_infodir}/				\
+cp -a $RPM_BUILD_ROOT%{_datarootdir}/locale/en\@quot		\\\
+	$RPM_BUILD_ROOT%{_datarootdir}/locale/en		\
+cp docs/grub.info $RPM_BUILD_ROOT%{_infodir}/%{name}.info	\
+cp docs/grub-dev.info						\\\
+	$RPM_BUILD_ROOT%{_infodir}/%{name}-dev.info		\
+install -d -m 0700 ${RPM_BUILD_ROOT}%{efi_esp_dir}/		\
+install -d -m 0700 ${RPM_BUILD_ROOT}/boot/grub2/		\
+install -d -m 0700 ${RPM_BUILD_ROOT}/boot/loader/entries	\
+install -d -m 0700 ${RPM_BUILD_ROOT}/boot/%{name}/themes/system	\
+install -d -m 0700 ${RPM_BUILD_ROOT}%{_sysconfdir}/default	\
+install -d -m 0700 ${RPM_BUILD_ROOT}%{_sysconfdir}/sysconfig	\
+touch ${RPM_BUILD_ROOT}%{_sysconfdir}/default/grub		\
+ln -sf ../default/grub						\\\
+	${RPM_BUILD_ROOT}%{_sysconfdir}/sysconfig/grub		\
+touch ${RPM_BUILD_ROOT}/boot/%{name}/grub.cfg			\
+%{nil}
+
+%define define_legacy_variant_files()				\
+%{expand:%%files %{1}}						\
+%defattr(-,root,root,-)						\
+%config(noreplace) %{_sysconfdir}/%{name}.cfg			\
+%ghost %config(noreplace) /boot/%{name}/grub.cfg		\
+%dir %attr(0700,root,root)/boot/loader/entries			\
+								\
+%{expand:%if 0%{?with_legacy_modules}				\
+%{expand:%%files %{1}-modules}					\
+%defattr(-,root,root)						\
+%dir %{_libdir}/grub/%{2}/					\
+%{_libdir}/grub/%{2}/*						\
+%exclude %{_libdir}/grub/%{2}/*.module				\
+%exclude %{_libdir}/grub/%{2}/{boot,boot_hybrid,cdboot,diskboot,lzma_decompress,pxeboot}.image \
+%exclude %{_libdir}/grub/%{2}/*.o				\
+%else								\
+%%exclude %%{_libdir}/grub/%%{grublegacyarch}/*			\
+%endif}								\
+%{nil}
+
+%define define_efi_variant_files()				\
+%{expand:%%files %{1}}						\
+%defattr(0700,root,root,-)					\
+%config(noreplace) %{_sysconfdir}/%{name}-efi.cfg		\
+%attr(0700,root,root)%{efi_esp_dir}/%{2}			\
+%dir %attr(0700,root,root)%{efi_esp_dir}/fonts			\
+%dir %attr(0700,root,root)/boot/loader/entries			\
+%ghost %config(noreplace) %attr(0700,root,root)%{efi_esp_dir}/grub.cfg	\
+%config(noreplace) /boot/grub2/grubenv					\
+%ghost %config(noreplace) %attr(0700,root,root)%{efi_esp_dir}/grubenv	\
+%{expand:%if 0%{?without_efi_modules}				\
+%exclude %{_libdir}/grub/%{6}					\
+%exclude %{_libdir}/grub/%{6}/*					\
+%endif}								\
+								\
+%{expand:%if 0%{?with_efi_modules}				\
+%{expand:%%files %{1}-modules}					\
+%defattr(-,root,root,-)						\
+%dir %{_libdir}/grub/%{6}/					\
+%{_libdir}/grub/%{6}/*						\
+%exclude %{_libdir}/grub/%{6}/*.module				\
+%endif}								\
+								\
+%{expand:%%files %{1}-cdboot}					\
+%defattr(0700,root,root,-)					\
+%attr(0700,root,root)%{efi_esp_dir}/%{3}			\
+%attr(0700,root,root)%{efi_esp_dir}/fonts			\
+%{nil}
+### end grub.macros
+
 Name:		grub2
 Epoch:		1
 Version:	2.02
@@ -12,10 +569,9 @@ Summary:	Bootloader with support for Linux, Multiboot and more
 License:	GPLv3+
 URL:		http://www.gnu.org/software/grub/
 Obsoletes:	grub < 1:0.98
-Source0:	ftp://alpha.gnu.org/gnu/grub/grub-%{tarversion}.tar.xz
-#Source0:	ftp://ftp.gnu.org/gnu/grub/grub-%%{tarversion}.tar.xz
-Source1:	grub.macros
-Source2:	grub.patches
+Source0:	https://ftp.gnu.org/gnu/grub/grub-%{tarversion}.tar.xz
+#Source0:	https://ftp.gnu.org/gnu/grub/grub-%%{tarversion}.tar.xz
+Source1:	https://ftp.gnu.org/gnu/grub/grub-%{tarversion}.tar.xz.sig
 Source3:	release-to-master.patch
 Source4:	http://unifoundry.com/unifont-5.1.20080820.pcf.gz
 Source5:	theme.tar.bz2
@@ -24,10 +580,300 @@ Source8:	strtoull_test.c
 Source9:	20-grub.install
 Source13:	99-grub-mkconfig.install
 
-%include %{SOURCE1}
-
 # generate with do-rebase
-%include %{SOURCE2}
+### begin grub.patches
+Patch0001: 0001-Add-support-for-Linux-EFI-stub-loading.patch
+Patch0002: 0002-Rework-linux-command.patch
+Patch0003: 0003-Rework-linux16-command.patch
+Patch0004: 0004-Add-secureboot-support-on-efi-chainloader.patch
+Patch0005: 0005-Make-any-of-the-loaders-that-link-in-efi-mode-honor-.patch
+Patch0006: 0006-Handle-multi-arch-64-on-32-boot-in-linuxefi-loader.patch
+Patch0007: 0007-re-write-.gitignore.patch
+Patch0008: 0008-IBM-client-architecture-CAS-reboot-support.patch
+Patch0009: 0009-for-ppc-reset-console-display-attr-when-clear-screen.patch
+Patch0010: 0010-Disable-GRUB-video-support-for-IBM-power-machines.patch
+Patch0011: 0011-Honor-a-symlink-when-generating-configuration-by-gru.patch
+Patch0012: 0012-Move-bash-completion-script-922997.patch
+Patch0013: 0013-Update-to-minilzo-2.08.patch
+Patch0014: 0014-Allow-fallback-to-include-entries-by-title-not-just-.patch
+Patch0015: 0015-Add-GRUB_DISABLE_UUID.patch
+Patch0016: 0016-Make-exit-take-a-return-code.patch
+Patch0017: 0017-Mark-po-exclude.pot-as-binary-so-git-won-t-try-to-di.patch
+Patch0018: 0018-Make-efi-machines-load-an-env-block-from-a-variable.patch
+Patch0019: 0019-DHCP-client-ID-and-UUID-options-added.patch
+Patch0020: 0020-trim-arp-packets-with-abnormal-size.patch
+Patch0021: 0021-Fix-bad-test-on-GRUB_DISABLE_SUBMENU.patch
+Patch0022: 0022-Add-support-for-UEFI-operating-systems-returned-by-o.patch
+Patch0023: 0023-Migrate-PPC-from-Yaboot-to-Grub2.patch
+Patch0024: 0024-Add-fw_path-variable-revised.patch
+Patch0025: 0025-Pass-x-hex-hex-straight-through-unmolested.patch
+Patch0026: 0026-Add-X-option-to-printf-functions.patch
+Patch0027: 0027-Search-for-specific-config-file-for-netboot.patch
+Patch0028: 0028-blscfg-add-blscfg-module-to-parse-Boot-Loader-Specif.patch
+Patch0029: 0029-Add-devicetree-loading.patch
+Patch0030: 0030-Don-t-write-messages-to-the-screen.patch
+Patch0031: 0031-Don-t-print-GNU-GRUB-header.patch
+Patch0032: 0032-Don-t-add-to-highlighted-row.patch
+Patch0033: 0033-Message-string-cleanups.patch
+Patch0034: 0034-Fix-border-spacing-now-that-we-aren-t-displaying-it.patch
+Patch0035: 0035-Use-the-correct-indentation-for-the-term-help-text.patch
+Patch0036: 0036-Indent-menu-entries.patch
+Patch0037: 0037-Fix-margins.patch
+Patch0038: 0038-Use-2-instead-of-1-for-our-right-hand-margin-so-line.patch
+Patch0039: 0039-Enable-pager-by-default.-985860.patch
+Patch0040: 0040-F10-doesn-t-work-on-serial-so-don-t-tell-the-user-to.patch
+Patch0041: 0041-Don-t-say-GNU-Linux-in-generated-menus.patch
+Patch0042: 0042-Don-t-draw-a-border-around-the-menu.patch
+Patch0043: 0043-Use-the-standard-margin-for-the-timeout-string.patch
+Patch0044: 0044-Add-.eh_frame-to-list-of-relocations-stripped.patch
+Patch0045: 0045-Don-t-munge-raw-spaces-when-we-re-doing-our-cmdline-.patch
+Patch0046: 0046-Don-t-require-a-password-to-boot-entries-generated-b.patch
+Patch0047: 0047-Don-t-emit-Booting-.-message.patch
+Patch0048: 0048-Replace-a-lot-of-man-pages-with-slightly-nicer-ones.patch
+Patch0049: 0049-use-fw_path-prefix-when-fallback-searching-for-grub-.patch
+Patch0050: 0050-Try-mac-guid-etc-before-grub.cfg-on-tftp-config-file.patch
+Patch0051: 0051-Fix-convert-function-to-support-NVMe-devices.patch
+Patch0052: 0052-reopen-SNP-protocol-for-exclusive-use-by-grub.patch
+Patch0053: 0053-Revert-reopen-SNP-protocol-for-exclusive-use-by-grub.patch
+Patch0054: 0054-Add-grub_util_readlink.patch
+Patch0055: 0055-Make-editenv-chase-symlinks-including-those-across-d.patch
+Patch0056: 0056-Generate-OS-and-CLASS-in-10_linux-from-etc-os-releas.patch
+Patch0057: 0057-Minimize-the-sort-ordering-for-.debug-and-rescue-ker.patch
+Patch0058: 0058-Try-prefix-if-fw_path-doesn-t-work.patch
+Patch0059: 0059-Update-info-with-grub.cfg-netboot-selection-order-11.patch
+Patch0060: 0060-Use-Distribution-Package-Sort-for-grub2-mkconfig-112.patch
+Patch0061: 0061-Handle-rssd-storage-devices.patch
+Patch0062: 0062-Make-grub2-mkconfig-construct-titles-that-look-like-.patch
+Patch0063: 0063-Add-friendly-grub2-password-config-tool-985962.patch
+Patch0064: 0064-Try-to-make-sure-configure.ac-and-grub-rpm-sort-play.patch
+Patch0065: 0065-tcp-add-window-scaling-support.patch
+Patch0066: 0066-efinet-add-filter-for-the-first-exclusive-reopen-of-.patch
+Patch0067: 0067-Fix-security-issue-when-reading-username-and-passwor.patch
+Patch0068: 0068-Warn-if-grub-password-will-not-be-read-1290803.patch
+Patch0069: 0069-Clean-up-grub-setpassword-documentation-1290799.patch
+Patch0070: 0070-Fix-locale-issue-in-grub-setpassword-1294243.patch
+Patch0071: 0071-efiemu-Handle-persistent-RAM-and-unknown-possible-fu.patch
+Patch0072: 0072-efiemu-Fix-compilation-failure.patch
+Patch0073: 0073-Revert-reopen-SNP-protocol-for-exclusive-use-by-grub.patch
+Patch0074: 0074-Add-a-url-parser.patch
+Patch0075: 0075-efinet-and-bootp-add-support-for-dhcpv6.patch
+Patch0076: 0076-Add-grub-get-kernel-settings-and-use-it-in-10_linux.patch
+Patch0077: 0077-Normalize-slashes-in-tftp-paths.patch
+Patch0078: 0078-Fix-malformed-tftp-packets.patch
+Patch0079: 0079-bz1374141-fix-incorrect-mask-for-ppc64.patch
+Patch0080: 0080-Make-grub_fatal-also-backtrace.patch
+Patch0081: 0081-Make-grub-editenv-build-again.patch
+Patch0082: 0082-Fix-up-some-man-pages-rpmdiff-noticed.patch
+Patch0083: 0083-Make-exit-take-a-return-code.patch
+Patch0084: 0084-arm64-make-sure-fdt-has-address-cells-and-size-cells.patch
+Patch0085: 0085-Make-our-info-pages-say-grub2-where-appropriate.patch
+Patch0086: 0086-print-more-debug-info-in-our-module-loader.patch
+Patch0087: 0087-macos-just-build-chainloader-entries-don-t-try-any-x.patch
+Patch0088: 0088-grub2-btrfs-Add-ability-to-boot-from-subvolumes.patch
+Patch0089: 0089-export-btrfs_subvol-and-btrfs_subvolid.patch
+Patch0090: 0090-grub2-btrfs-03-follow_default.patch
+Patch0091: 0091-grub2-btrfs-04-grub2-install.patch
+Patch0092: 0092-grub2-btrfs-05-grub2-mkconfig.patch
+Patch0093: 0093-grub2-btrfs-06-subvol-mount.patch
+Patch0094: 0094-No-more-Bootable-Snapshot-submenu-in-grub.cfg.patch
+Patch0095: 0095-Fallback-to-old-subvol-name-scheme-to-support-old-sn.patch
+Patch0096: 0096-Grub-not-working-correctly-with-btrfs-snapshots-bsc-.patch
+Patch0097: 0097-Add-grub_efi_allocate_pool-and-grub_efi_free_pool-wr.patch
+Patch0098: 0098-Use-grub_efi_.-memory-helpers-where-reasonable.patch
+Patch0099: 0099-Add-PRIxGRUB_EFI_STATUS-and-use-it.patch
+Patch0100: 0100-Don-t-use-dynamic-sized-arrays-since-we-don-t-build-.patch
+Patch0101: 0101-don-t-ignore-const.patch
+Patch0102: 0102-don-t-use-int-for-efi-status.patch
+Patch0103: 0103-make-GRUB_MOD_INIT-declare-its-function-prototypes.patch
+Patch0104: 0104-editenv-handle-relative-symlinks.patch
+Patch0105: 0105-Make-libgrub.pp-depend-on-config-util.h.patch
+Patch0106: 0106-Don-t-guess-boot-efi-as-HFS-on-ppc-machines-in-grub-.patch
+Patch0107: 0107-20_linux_xen-load-xen-or-multiboot-2-modules-as-need.patch
+Patch0108: 0108-Make-pmtimer-tsc-calibration-not-take-51-seconds-to-.patch
+Patch0109: 0109-align-struct-efi_variable-better.patch
+Patch0110: 0110-Add-quicksort-implementation.patch
+Patch0111: 0111-Add-blscfg-command-support-to-parse-BootLoaderSpec-c.patch
+Patch0112: 0112-Add-BLS-support-to-grub-mkconfig.patch
+Patch0113: 0113-Remove-duplicated-grub_exit-definition-for-grub-emu-.patch
+Patch0114: 0114-Don-t-attempt-to-backtrace-on-grub_abort-for-grub-em.patch
+Patch0115: 0115-Enable-blscfg-command-for-the-emu-platform.patch
+Patch0116: 0116-Add-linux-and-initrd-commands-for-grub-emu.patch
+Patch0117: 0117-Fix-the-efidir-in-grub-setpassword.patch
+Patch0118: 0118-Add-grub2-switch-to-blscfg.patch
+Patch0119: 0119-Add-grub_debug_enabled.patch
+Patch0120: 0120-make-better-backtraces.patch
+Patch0121: 0121-normal-don-t-draw-our-startup-message-if-debug-is-se.patch
+Patch0122: 0122-Work-around-some-minor-include-path-weirdnesses.patch
+Patch0123: 0123-Make-it-possible-to-enabled-build-id-sha1.patch
+Patch0124: 0124-Add-grub_qdprintf-grub_dprintf-without-the-file-line.patch
+Patch0125: 0125-Make-a-gdb-dprintf-that-tells-us-load-addresses.patch
+Patch0126: 0126-Only-attempt-to-scan-different-BLS-directories-on-EF.patch
+Patch0127: 0127-Core-TPM-support.patch
+Patch0128: 0128-Measure-kernel-initrd.patch
+Patch0129: 0129-Add-BIOS-boot-measurement.patch
+Patch0130: 0130-Measure-kernel-and-initrd-on-BIOS-systems.patch
+Patch0131: 0131-Measure-the-kernel-commandline.patch
+Patch0132: 0132-Measure-commands.patch
+Patch0133: 0133-Measure-multiboot-images-and-modules.patch
+Patch0134: 0134-Fix-boot-when-there-s-no-TPM.patch
+Patch0135: 0135-Rework-TPM-measurements.patch
+Patch0136: 0136-Fix-event-log-prefix.patch
+Patch0137: 0137-Set-the-first-boot-menu-entry-as-default-when-using-.patch
+Patch0138: 0138-tpm-fix-warnings-when-compiling-for-platforms-other-.patch
+Patch0139: 0139-Make-TPM-errors-less-fatal.patch
+Patch0140: 0140-blscfg-handle-multiple-initramfs-images.patch
+Patch0141: 0141-BLS-Fix-grub2-switch-to-blscfg-on-non-EFI-machines.patch
+Patch0142: 0142-BLS-Use-etcdefaultgrub-instead-of-etc.patch
+Patch0143: 0143-Add-missing-options-to-grub2-switch-to-blscfg-man-pa.patch
+Patch0144: 0144-Make-grub2-switch-to-blscfg-to-generate-debug-BLS-wh.patch
+Patch0145: 0145-Make-grub2-switch-to-blscfg-to-generate-BLS-fragment.patch
+Patch0146: 0146-Only-attempt-to-query-dev-mounted-in-boot-efi-as-boo.patch
+Patch0147: 0147-Include-OSTree-path-when-searching-kernels-images-if.patch
+Patch0148: 0148-Use-BLS-version-field-to-compare-entries-if-id-field.patch
+Patch0149: 0149-Add-version-field-to-BLS-generated-by-grub2-switch-t.patch
+Patch0150: 0150-Fixup-for-newer-compiler.patch
+Patch0151: 0151-Don-t-attempt-to-export-the-start-and-_start-symbols.patch
+Patch0152: 0152-Simplify-BLS-entry-key-val-pairs-lookup.patch
+Patch0153: 0153-Add-relative-path-to-the-kernel-and-initrds-BLS-fiel.patch
+Patch0154: 0154-Skip-leading-spaces-on-BLS-field-values.patch
+Patch0155: 0155-Fixup-for-newer-compiler.patch
+Patch0156: 0156-TPM-Fix-hash_log_extend_event-function-prototype.patch
+Patch0157: 0157-TPM-Fix-compiler-warnings.patch
+Patch0158: 0158-grub-switch-to-blscfg.in-get-rid-of-a-bunch-of-bashi.patch
+Patch0159: 0159-grub-switch-to-blscfg.in-Better-boot-prefix-checking.patch
+Patch0160: 0160-Use-boot-loader-entries-as-BLS-directory-path-also-o.patch
+Patch0161: 0161-Use-BLS-fragment-filename-as-menu-entry-id-and-for-c.patch
+Patch0162: 0162-Fix-grub-switch-to-blscfg-boot-prefix-handling.patch
+Patch0163: 0163-Revert-trim-arp-packets-with-abnormal-size.patch
+Patch0164: 0164-Use-xid-to-match-DHCP-replies.patch
+Patch0165: 0165-Add-support-for-non-Ethernet-network-cards.patch
+Patch0166: 0166-misc-fix-invalid-character-recongition-in-strto-l.patch
+Patch0167: 0167-net-read-bracketed-ipv6-addrs-and-port-numbers.patch
+Patch0168: 0168-net-read-bracketed-ipv6-addrs-and-port-numbers-pjone.patch
+Patch0169: 0169-bootp-New-net_bootp6-command.patch
+Patch0170: 0170-Put-back-our-code-to-add-a-local-route.patch
+Patch0171: 0171-efinet-UEFI-IPv6-PXE-support.patch
+Patch0172: 0172-grub.texi-Add-net_bootp6-doument.patch
+Patch0173: 0173-bootp-Add-processing-DHCPACK-packet-from-HTTP-Boot.patch
+Patch0174: 0174-efinet-Setting-network-from-UEFI-device-path.patch
+Patch0175: 0175-efinet-Setting-DNS-server-from-UEFI-protocol.patch
+Patch0176: 0176-Fix-one-more-coverity-complaint.patch
+Patch0177: 0177-Fix-grub_net_hwaddr_to_str.patch
+Patch0178: 0178-Support-UEFI-networking-protocols.patch
+Patch0179: 0179-AUDIT-0-http-boot-tracker-bug.patch
+Patch0180: 0180-grub-core-video-efi_gop.c-Add-support-for-BLT_ONLY-a.patch
+Patch0181: 0181-efi-uga-use-64-bit-for-fb_base.patch
+Patch0182: 0182-EFI-console-Do-not-set-text-mode-until-we-actually-n.patch
+Patch0183: 0183-EFI-console-Add-grub_console_read_key_stroke-helper-.patch
+Patch0184: 0184-EFI-console-Implement-getkeystatus-support.patch
+Patch0185: 0185-Make-grub_getkeystatus-helper-funtion-available-ever.patch
+Patch0186: 0186-Accept-ESC-F8-and-holding-SHIFT-as-user-interrupt-ke.patch
+Patch0187: 0187-grub-editenv-Add-incr-command-to-increment-integer-v.patch
+Patch0188: 0188-Add-auto-hide-menu-support.patch
+Patch0189: 0189-Output-a-menu-entry-for-firmware-setup-on-UEFI-FastB.patch
+Patch0190: 0190-Add-grub-set-bootflag-utility.patch
+Patch0191: 0191-Fix-grub-setpassword-o-s-output-path.patch
+Patch0192: 0192-Make-grub-set-password-be-named-like-all-the-other-g.patch
+Patch0193: 0193-docs-Add-grub-boot-indeterminate.service-example.patch
+Patch0194: 0194-00_menu_auto_hide-Use-a-timeout-of-60s-for-menu_show.patch
+Patch0195: 0195-00_menu_auto_hide-Reduce-number-of-save_env-calls.patch
+Patch0196: 0196-30_uefi-firmware-fix-use-with-sys-firmware-efi-efiva.patch
+Patch0197: 0197-gentpl-add-disable-support.patch
+Patch0198: 0198-gentpl-add-pc-firmware-type.patch
+Patch0199: 0199-blscfg-remove-unused-typedef.patch
+Patch0200: 0200-blscfg-don-t-dynamically-allocate-default_blsdir.patch
+Patch0201: 0201-blscfg-sort-BLS-entries-by-version-field.patch
+Patch0202: 0202-blscfg-remove-NULL-guards-around-grub_free.patch
+Patch0203: 0203-blscfg-fix-filename-in-no-linux-key-error.patch
+Patch0204: 0204-blscfg-don-t-leak-bls_entry.filename.patch
+Patch0205: 0205-blscfg-fix-compilation-on-EFI-and-EMU.patch
+Patch0206: 0206-Add-loadenv-to-blscfg-and-loadenv-source-file-list.patch
+Patch0207: 0207-blscfg-Get-rid-of-the-linuxefi-linux16-linux-distinc.patch
+Patch0208: 0208-grub-switch-to-blscfg-Only-fix-boot-prefix-for-non-g.patch
+Patch0209: 0209-blscfg-Expand-the-BLS-options-field-instead-of-showi.patch
+Patch0210: 0210-blscfg-Fallback-to-search-BLS-snippets-in-boot-loade.patch
+Patch0211: 0211-blscfg-Don-t-attempt-to-sort-by-version-if-not-prese.patch
+Patch0212: 0212-blscfg-remove-logic-to-read-the-grubenv-file-and-set.patch
+Patch0213: 0213-Rename-00_menu_auto_hide.in-to-01_menu_auto_hide.in.patch
+Patch0214: 0214-efinet-also-use-the-firmware-acceleration-for-http.patch
+Patch0215: 0215-efi-http-Make-root_url-reflect-the-protocol-hostname.patch
+Patch0216: 0216-Disable-multiboot-multiboot2-and-linux16-modules-on-.patch
+Patch0217: 0217-Force-everything-to-use-python3.patch
+Patch0218: 0218-Fix-an-8-year-old-typo.patch
+Patch0219: 0219-autogen-don-t-run-autoreconf-in-the-topdir.patch
+Patch0220: 0220-Make-it-so-we-can-tell-configure-which-cflags-utils-.patch
+Patch0221: 0221-module-verifier-make-it-possible-to-run-checkers-on-.patch
+Patch0222: 0222-grub-module-verifier-report-the-filename-or-modname-.patch
+Patch0223: 0223-Make-efi_netfs-not-duplicate-symbols-from-efinet.patch
+Patch0224: 0224-Rework-how-the-fdt-command-builds.patch
+Patch0225: 0225-Disable-non-wordsize-allocations-on-arm.patch
+Patch0226: 0226-strip-R-.note.gnu.property-at-more-places.patch
+Patch0227: 0227-Prepend-prefix-when-HTTP-path-is-relative.patch
+Patch0228: 0228-Make-linux_arm_kernel_header.hdr_offset-be-at-the-ri.patch
+Patch0229: 0229-Mark-some-unused-stuff-unused.patch
+Patch0230: 0230-Make-grub_error-more-verbose.patch
+Patch0231: 0231-Make-reset-an-alias-for-the-reboot-command.patch
+Patch0232: 0232-EFI-more-debug-output-on-GOP-and-UGA-probing.patch
+Patch0233: 0233-Add-a-version-command.patch
+Patch0234: 0234-Add-more-dprintf-and-nerf-dprintf-in-script.c.patch
+Patch0235: 0235-arm-arm64-loader-Better-memory-allocation-and-error-.patch
+Patch0236: 0236-Try-to-pick-better-locations-for-kernel-and-initrd.patch
+Patch0237: 0237-Attempt-to-fix-up-all-the-places-Wsign-compare-error.patch
+Patch0238: 0238-Don-t-use-Wno-sign-compare-Wno-conversion-Wno-error-.patch
+Patch0239: 0239-grub-boot-success.timer-Add-a-few-Conditions-for-run.patch
+Patch0240: 0240-x86-efi-Use-bounce-buffers-for-reading-to-addresses-.patch
+Patch0241: 0241-x86-efi-Re-arrange-grub_cmd_linux-a-little-bit.patch
+Patch0242: 0242-x86-efi-Make-our-own-allocator-for-kernel-stuff.patch
+Patch0243: 0243-x86-efi-Allow-initrd-params-cmdline-allocations-abov.patch
+Patch0244: 0244-docs-Stop-using-polkit-pkexec-for-grub-boot-success..patch
+Patch0245: 0245-drop-TPM-support-for-legacy-BIOS.patch
+Patch0246: 0246-Move-quicksort-function-from-kernel.exec-to-the-blsc.patch
+Patch0247: 0247-Include-blscfg-module-for-powerpc-ieee1275.patch
+Patch0248: 0248-grub-switch-to-blscfg-copy-blscfg-module-for-legacy-.patch
+Patch0249: 0249-Fix-getroot.c-s-trampolines.patch
+Patch0250: 0250-Do-not-allow-stack-trampolines-anywhere.patch
+Patch0251: 0251-Reimplement-boot_counter.patch
+Patch0252: 0252-blscfg-don-t-include-.conf-at-the-end-of-our-id.patch
+Patch0253: 0253-grub-get-kernel-settings-expose-some-more-config-var.patch
+Patch0254: 0254-Reimplement-boot_counter.patch
+Patch0255: 0255-add-10_linux_bls-grub.d-snippet-to-generate-menu-ent.patch
+Patch0256: 0256-Only-set-kernelopts-in-grubenv-if-it-wasn-t-set-befo.patch
+Patch0257: 0257-blscfg-sort-everything-with-rpm-package-comparison.patch
+Patch0258: 0258-10_linux_bls-use-grub2-rpm-sort-instead-of-ls-vr-to-.patch
+Patch0259: 0259-don-t-set-saved_entry-on-grub2-mkconfig.patch
+Patch0260: 0260-grub-switch-to-blscfg-use-debug-instead-of-debug-as-.patch
+Patch0261: 0261-Make-blscfg-debug-messages-more-useful.patch
+Patch0262: 0262-Make-grub_strtoul-end-pointer-have-the-right-constif.patch
+Patch0263: 0263-Fix-menu-entry-selection-based-on-ID-and-title.patch
+Patch0264: 0264-Add-comments-and-revert-logic-changes-in-01_fallback.patch
+Patch0265: 0265-Remove-quotes-when-reading-ID-value-from-etc-os-rele.patch
+Patch0266: 0266-blscfg-expand-grub_users-before-passing-to-grub_norm.patch
+Patch0267: 0267-Make-the-menu-entry-users-option-argument-to-be-opti.patch
+Patch0268: 0268-10_linux_bls-add-missing-menu-entries-options.patch
+Patch0269: 0269-Fix-menu-entry-selection-based-on-title.patch
+Patch0270: 0270-BLS-files-should-only-be-copied-by-grub-switch-to-bl.patch
+Patch0271: 0271-Fix-get_entry_number-wrongly-dereferencing-the-tail-.patch
+Patch0272: 0272-Make-grub2-mkconfig-to-honour-GRUB_CMDLINE_LINUX-in-.patch
+Patch0273: 0273-Add-efi-export-env-and-efi-load-env-commands.patch
+Patch0274: 0274-Make-it-possible-to-subtract-conditions-from-debug.patch
+Patch0275: 0275-Export-all-variables-from-the-initial-context-when-c.patch
+Patch0276: 0276-blscfg-store-the-BLS-entries-in-a-sorted-linked-list.patch
+Patch0277: 0277-blscfg-add-more-options-to-blscfg-command-to-make-it.patch
+Patch0278: 0278-blscfg-add-support-for-prepend-early-initrds-to-the-.patch
+Patch0279: 0279-Fix-the-looking-up-grub.cfg-XXX-while-tftp-booting.patch
+Patch0280: 0280-Try-to-set-fPIE-and-friends-on-libgnu.a.patch
+Patch0281: 0281-Don-t-make-grub_strtoull-print-an-error-if-no-conver.patch
+Patch0282: 0282-Set-blsdir-if-the-BLS-directory-path-isn-t-one-of-th.patch
+Patch0283: 0283-Check-if-blsdir-exists-before-attempting-to-get-it-s.patch
+Patch0284: 0284-blscfg-fallback-to-default_kernelopts-if-BLS-option-.patch
+Patch0285: 0285-grub-switch-to-blscfg-copy-increment.mod-for-legacy-.patch
+Patch0286: 0286-Only-set-blsdir-if-boot-loader-entries-is-in-a-btrfs.patch
+Patch0287: 0287-blscfg-don-t-use-grub_list_t-and-the-GRUB_AS_LIST-ma.patch
+Patch0288: 0288-10_linux_bls-don-t-add-users-option-to-generated-men.patch
+Patch0289: 0289-grub.d-Split-out-boot-success-reset-from-menu-auto-h.patch
+Patch0290: 0290-HTTP-boot-strncmp-returns-0-on-equal.patch
+Patch0291: 0291-Add-10_reset_boot_success-to-Makefile.patch
+### end grub.patches
 
 BuildRequires:	gcc efi-srpm-macros
 BuildRequires:	flex bison binutils python3
