@@ -52,7 +52,7 @@ index 5a8c390a1da..5da55393291 100644
 --- a/Makefile.util.def
 +++ b/Makefile.util.def
 @@ -1435,3 +1435,10 @@ program = {
-   ldadd = grub-core/gnulib/libgnu.a;
+   ldadd = grub-core/lib/gnulib/libgnu.a;
    ldadd = '$(LIBINTL) $(LIBDEVMAPPER) $(LIBZFS) $(LIBNVPAIR) $(LIBGEOM)';
  };
 +
@@ -231,14 +231,14 @@ index 42475592123..6c4cfc53781 100644
 --- a/.gitignore
 +++ b/.gitignore
 @@ -111,6 +111,8 @@ grub-*.tar.*
- /grub*-rpm-sort.8
+ /grub*-render-label.1
  /grub*-script-check
  /grub*-script-check.1
 +/grub*-set-bootflag
 +/grub*-set-bootflag.1
  /grub*-set-default
  /grub*-set-default.8
- /grub*-setsetpassword
+ /grub*-shell
 diff --git a/conf/Makefile.extra-dist b/conf/Makefile.extra-dist
 index 39eb94bded6..5946ec24a65 100644
 --- a/conf/Makefile.extra-dist
