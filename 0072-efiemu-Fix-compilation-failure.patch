@@ -1,0 +1,27 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Vladimir Serbinenko <phcoder@gmail.com>
+Date: Fri, 22 Jan 2016 14:10:30 +0100
+Subject: [PATCH] efiemu: Fix compilation failure
+
+(cherry picked from commit b6a03dfd327489d53ee07c6d7d593b99c7b7cb62)
+
+Resolves: rhbz#1288608
+---
+ grub-core/efiemu/mm.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/grub-core/efiemu/mm.c b/grub-core/efiemu/mm.c
+index 92e7df7e501..52a032f7b2e 100644
+--- a/grub-core/efiemu/mm.c
++++ b/grub-core/efiemu/mm.c
+@@ -410,8 +410,8 @@ fill_hook (grub_uint64_t addr, grub_uint64_t size, grub_memory_type_t type,
+ 	return grub_efiemu_add_to_mmap (addr, size,
+ 					GRUB_EFI_ACPI_MEMORY_NVS);
+ 
+-      case GRUB_MEMORY_PRAM:
+-      case GRUB_MEMORY_PMEM:
++      case GRUB_MEMORY_PERSISTENT:
++      case GRUB_MEMORY_PERSISTENT_LEGACY:
+ 	return grub_efiemu_add_to_mmap (addr, size,
+ 					GRUB_EFI_PERSISTENT_MEMORY);
+       default:

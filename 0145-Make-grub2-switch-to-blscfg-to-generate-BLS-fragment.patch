@@ -1,0 +1,28 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Javier Martinez Canillas <javierm@redhat.com>
+Date: Wed, 11 Apr 2018 12:39:59 +0200
+Subject: [PATCH] Make grub2-switch-to-blscfg to generate BLS fragment for
+ rescue kernel
+
+If a rescue image is available, it should have a BootLoaderSpec fragment.
+
+Signed-off-by: Javier Martinez Canillas <javierm@redhat.com>
+---
+ util/grub-switch-to-blscfg.in | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/util/grub-switch-to-blscfg.in b/util/grub-switch-to-blscfg.in
+index c59299ffa6a..bc28053cd30 100644
+--- a/util/grub-switch-to-blscfg.in
++++ b/util/grub-switch-to-blscfg.in
+@@ -243,6 +243,10 @@ for kernelver in $(cd /lib/modules/ ; ls -1) "" ; do
+     fi
+ done
+ 
++if [[ -f "/boot/vmlinuz-0-rescue-${MACHINE_ID}" ]]; then
++    mkbls "0-rescue-${MACHINE_ID}" "0" >"${blsdir}/${MACHINE_ID}-0-rescue.conf"
++fi
++
+ GENERATE=0
+ if grep '^GRUB_ENABLE_BLSCFG=.*' "${etcdefaultgrub}" \
+         | grep -vq '^GRUB_ENABLE_BLSCFG="*true"*\s*$' ; then

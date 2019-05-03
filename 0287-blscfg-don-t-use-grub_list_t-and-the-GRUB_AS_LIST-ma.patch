@@ -1,0 +1,76 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Javier Martinez Canillas <javierm@redhat.com>
+Date: Fri, 22 Mar 2019 11:14:26 +0100
+Subject: [PATCH] blscfg: don't use grub_list_t and the GRUB_AS_LIST() macro
+
+We are not using GRUB's list functions anyways since we want to add new
+items in the middle ot the list but GRUB's grub_list_push() only allows
+to add new items at the beginning of the list. So don't use grub_list_t
+and GRUB_AS_LIST() macro and just reference struct bls_entry * directly.
+
+We can't change GRUB lists API because we want the blscfg module to not
+need external symbols so it can be updated without updating GRUB's core.
+
+This also solves a bug where the struct bls_entry .next field wasn't set
+correctly which caused some entries to not be populated in the grub menu.
+
+Resolves: rhbz#1691232
+
+Signed-off-by: Javier Martinez Canillas <javierm@redhat.com>
+---
+ grub-core/commands/blscfg.c | 10 +++++-----
+ include/grub/menu.h         |  2 +-
+ 2 files changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/grub-core/commands/blscfg.c b/grub-core/commands/blscfg.c
+index 5635066e3eb..bb93b7f4904 100644
+--- a/grub-core/commands/blscfg.c
++++ b/grub-core/commands/blscfg.c
+@@ -350,13 +350,13 @@ static int bls_cmp(const struct bls_entry *e0, const struct bls_entry *e1)
+   return r;
+ }
+ 
+-static void list_add_tail(grub_list_t head, grub_list_t item)
++static void list_add_tail(struct bls_entry *head, struct bls_entry *item)
+ {
+   item->next = head;
+   if (head->prev)
+-    (*head->prev)->next = item;
++    head->prev->next = item;
+   item->prev = head->prev;
+-  head->prev = &item;
++  head->prev = item;
+ }
+ 
+ static int bls_add_entry(struct bls_entry *entry)
+@@ -378,7 +378,7 @@ static int bls_add_entry(struct bls_entry *entry)
+ 
+     if (rc == 1) {
+       grub_dprintf ("blscfg", "Add entry with id \"%s\"\n", entry->filename);
+-      list_add_tail (GRUB_AS_LIST (e), GRUB_AS_LIST (entry));
++      list_add_tail (e, entry);
+       if (e == entries) {
+ 	entries = entry;
+ 	entry->prev = NULL;
+@@ -391,7 +391,7 @@ static int bls_add_entry(struct bls_entry *entry)
+   if (last) {
+     grub_dprintf ("blscfg", "Add entry with id \"%s\"\n", entry->filename);
+     last->next = entry;
+-    entry->prev = &last;
++    entry->prev = last;
+   }
+ 
+   return 0;
+diff --git a/include/grub/menu.h b/include/grub/menu.h
+index eea493f74b1..0acdc2aa6bf 100644
+--- a/include/grub/menu.h
++++ b/include/grub/menu.h
+@@ -23,7 +23,7 @@
+ struct bls_entry
+ {
+   struct bls_entry *next;
+-  struct bls_entry **prev;
++  struct bls_entry *prev;
+   struct keyval **keyvals;
+   int nkeyvals;
+   char *filename;

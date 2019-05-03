@@ -1,0 +1,27 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Javier Martinez Canillas <javierm@redhat.com>
+Date: Fri, 6 Apr 2018 14:08:36 +0200
+Subject: [PATCH] Set the first boot menu entry as default when using BLS
+ fragments
+
+When BootLoaderSpec configuration files are used, the default boot menu
+entry is always set to the first entry as sorted by the blscfg command.
+
+Suggested-by: Peter Jones <pjones@redhat.com>
+Signed-off-by: Javier Martinez Canillas <javierm@redhat.com>
+---
+ util/grub.d/10_linux.in | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/util/grub.d/10_linux.in b/util/grub.d/10_linux.in
+index 839f1fdb655..89cd71d852d 100644
+--- a/util/grub.d/10_linux.in
++++ b/util/grub.d/10_linux.in
+@@ -144,6 +144,7 @@ if [ -s \$prefix/grubenv ]; then
+ fi
+ EOF
+ 
++    ${grub_editenv} - set saved_entry=0
+     ${grub_editenv} - set kernelopts="root=${linux_root_device_thisversion} ro ${args}"
+ 
+     exit 0

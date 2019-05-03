@@ -1,0 +1,56 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Javier Martinez Canillas <javierm@redhat.com>
+Date: Thu, 7 Jun 2018 00:44:51 +0200
+Subject: [PATCH] Skip leading spaces on BLS field values
+
+The GRUB 2 blscfg command doesn't parse correctly the BLS fields if these
+have extra spaces before the field values. For example, the following BLS
+fragment generates a wrong menu entry due using spaces to tabulate values:
+
+title      Fedora 28 (Twenty Eight)
+version    4.16.13-300.fc28.x86_64
+machine-id e5c131dfee3249cbb9891c2641d8e350
+linux      /vmlinuz-4.16.13-300.fc28.x86_64
+initrd     /initramfs-4.16.13-300.fc28.x86_64.img
+options    root=/dev/mapper/fedora-root ro
+
+Wrong generated menu entry:
+
+load_video
+set gfx_payload=keep
+insmod gzio
+linux  ($root)    /vmlinuz-4.16.13-300.fc28.x86_64    root=/dev/mapper/fedora-root ro
+initrd ($root)    /initramfs-4.16.13-300.fc28.x86_64.img
+
+Correct menu entry after the fix:
+
+load_video
+set gfx_payload=keep
+insmod gzio
+linux ($root)/vmlinuz-4.16.13-300.fc28.x86_64 root=/dev/mapper/fedora-root ro
+initrd ($root)/initramfs-4.16.13-300.fc28.x86_64.img
+
+Resolves: rhbz#1588184
+
+Signed-off-by: Javier Martinez Canillas <javierm@redhat.com>
+---
+ grub-core/commands/blscfg.c | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/grub-core/commands/blscfg.c b/grub-core/commands/blscfg.c
+index fb08d8e4c12..831cdcaccdf 100644
+--- a/grub-core/commands/blscfg.c
++++ b/grub-core/commands/blscfg.c
+@@ -448,7 +448,11 @@ static int read_entry (
+ 
+       separator[0] = '\0';
+ 
+-      rc = bls_add_keyval (entry, buf, separator+1);
++      do {
++	separator++;
++      } while (*separator == ' ' || *separator == '\t');
++
++      rc = bls_add_keyval (entry, buf, separator);
+       grub_free (buf);
+       if (rc < 0)
+ 	break;

@@ -1,0 +1,37 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Javier Martinez Canillas <javierm@redhat.com>
+Date: Thu, 28 Mar 2019 16:34:42 +0100
+Subject: [PATCH] 10_linux_bls: don't add --users option to generated menu
+ entries
+
+The generated menu entries have a --users $grub_users option but this will
+fail on old versions of GRUB, since it expects the --users option argument
+to either be a constant or a variable that has been set.
+
+The latest GRUB version fix this but the GRUB core isn't updated on a GRUB
+package update, so this will cause the entries to not be shown in the menu
+after a system upgrade.
+
+Since can cause issues and because the entries that weren't generated from
+the BLS snippets didn't have the --users option either, just don't add it.
+
+Resolves: rhbz#1693515
+
+Signed-off-by: Javier Martinez Canillas <javierm@redhat.com>
+---
+ util/grub.d/10_linux_bls.in | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/util/grub.d/10_linux_bls.in b/util/grub.d/10_linux_bls.in
+index 1707e86f2d3..b8ee9916329 100644
+--- a/util/grub.d/10_linux_bls.in
++++ b/util/grub.d/10_linux_bls.in
+@@ -180,7 +180,7 @@ populate_menu()
+     for bls in "${files[@]}" ; do
+         read_config "${blsdir}/${bls}.conf"
+ 
+-        menu="${menu}menuentry '${title}' --class ${grub_class} ${grub_arg} --users ${grub_users} --id ${bls} {\n"
++        menu="${menu}menuentry '${title}' --class ${grub_class} ${grub_arg} --id ${bls} {\n"
+         menu="${menu}\t linux ${linux} ${options}\n"
+         if [ -n "${initrd}" ] ; then
+             menu="${menu}\t initrd ${boot_prefix}${initrd}\n"

@@ -1,0 +1,38 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Michael Marineau <michael.marineau@coreos.com>
+Date: Sun, 21 Aug 2016 18:24:58 -0700
+Subject: [PATCH] tpm: fix warnings when compiling for platforms other than pc
+ and efi
+
+---
+ include/grub/tpm.h | 17 +++++++++++------
+ 1 file changed, 11 insertions(+), 6 deletions(-)
+
+diff --git a/include/grub/tpm.h b/include/grub/tpm.h
+index ecb2d09ff5d..972a5edc836 100644
+--- a/include/grub/tpm.h
++++ b/include/grub/tpm.h
+@@ -75,12 +75,17 @@ grub_err_t grub_tpm_execute(PassThroughToTPM_InputParamBlock *inbuf,
+ grub_err_t grub_tpm_log_event(unsigned char *buf, grub_size_t size,
+ 			      grub_uint8_t pcr, const char *description);
+ #else
+-static inline grub_err_t grub_tpm_execute(PassThroughToTPM_InputParamBlock *inbuf,
+-					  PassThroughToTPM_OutputParamBlock *outbuf) { return 0; };
+-static inline grub_err_t grub_tpm_log_event(unsigned char *buf,
+-					    grub_size_t size,
+-					    grub_uint8_t pcr,
+-					    const char *description)
++static inline grub_err_t grub_tpm_execute(
++	PassThroughToTPM_InputParamBlock *inbuf __attribute__ ((unused)),
++	PassThroughToTPM_OutputParamBlock *outbuf __attribute__ ((unused)))
++{
++	return 0;
++};
++static inline grub_err_t grub_tpm_log_event(
++	unsigned char *buf __attribute__ ((unused)),
++	grub_size_t size __attribute__ ((unused)),
++	grub_uint8_t pcr __attribute__ ((unused)),
++	const char *description __attribute__ ((unused)))
+ {
+ 	return 0;
+ };

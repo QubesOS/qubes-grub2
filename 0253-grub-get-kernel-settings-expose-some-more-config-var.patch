@@ -1,0 +1,32 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Peter Jones <pjones@redhat.com>
+Date: Thu, 11 Oct 2018 15:31:04 -0400
+Subject: [PATCH] grub-get-kernel-settings: expose some more config variables
+
+This exposes MAKEDEFAULT as GRUB_UPDATE_DEFAULT_KERNEL and DEFAULTDEBUG as
+GRUB_DEFAULT_TO_DEBUG
+
+Related: rhbz#1638117
+Signed-off-by: Peter Jones <pjones@redhat.com>
+---
+ util/grub-get-kernel-settings.in | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/util/grub-get-kernel-settings.in b/util/grub-get-kernel-settings.in
+index 12046219878..7e87dfccc0e 100644
+--- a/util/grub-get-kernel-settings.in
++++ b/util/grub-get-kernel-settings.in
+@@ -76,3 +76,13 @@ if [ "$MAKEDEBUG" = "yes" ]; then
+     echo GRUB_LINUX_DEBUG_TITLE_POSTFIX=\" with debugging\"
+     echo export GRUB_LINUX_DEBUG_TITLE_POSTFIX
+ fi
++if [ "$DEFAULTDEBUG" = "yes" ]; then
++    echo GRUB_DEFAULT_TO_DEBUG=true
++else
++    echo GRUB_DEFAULT_TO_DEBUG=false
++fi
++echo export GRUB_DEFAULT_TO_DEBUG
++if [ "$UPDATEDEFAULT" = "yes" ]; then
++    echo GRUB_UPDATE_DEFAULT_KERNEL=true
++    echo export GRUB_UPDATE_DEFAULT_KERNEL
++fi

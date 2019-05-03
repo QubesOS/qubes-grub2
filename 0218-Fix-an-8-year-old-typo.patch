@@ -1,0 +1,23 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Peter Jones <pjones@redhat.com>
+Date: Thu, 26 Jul 2018 14:54:44 -0400
+Subject: [PATCH] Fix an 8 year old typo.
+
+Signed-off-by: Peter Jones <pjones@redhat.com>
+---
+ configure.ac | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/configure.ac b/configure.ac
+index 5f47a9265f3..9ab683fefac 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -307,7 +307,7 @@ fi
+ 
+ AC_SUBST(bootdirname)
+ AC_DEFINE_UNQUOTED(GRUB_BOOT_DIR_NAME, "$bootdirname",
+-    [Default boot directory name]")
++    [Default boot directory name])
+ 
+ AC_ARG_WITH([grubdir],
+             AS_HELP_STRING([--with-grubdir=DIR],

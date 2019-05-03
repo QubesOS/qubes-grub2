@@ -1,0 +1,60 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Javier Martinez Canillas <javierm@redhat.com>
+Date: Tue, 26 Feb 2019 20:11:27 +0100
+Subject: [PATCH] blscfg: fallback to default_kernelopts if BLS option field
+ isn't set
+
+If the $kernelopts variable isn't found, then the entry will fail to boot
+since there won't be a kernel command line params set. This makes the BLS
+configuration more fragile than a non-BLS one, since in that case it will
+boot even without a correct grubenv file.
+
+So set a $default_kernelopts in the GRUB config file that will be used as
+a fallback if the value in the BLS options field can't be resolved.
+
+Related: rhbz#1625124
+
+Signed-off-by: Javier Martinez Canillas <javierm@redhat.com>
+---
+ grub-core/commands/blscfg.c | 7 +++++++
+ util/grub.d/10_linux.in     | 2 ++
+ 2 files changed, 9 insertions(+)
+
+diff --git a/grub-core/commands/blscfg.c b/grub-core/commands/blscfg.c
+index 1ef2ae06cff..5635066e3eb 100644
+--- a/grub-core/commands/blscfg.c
++++ b/grub-core/commands/blscfg.c
+@@ -629,6 +629,9 @@ static char *expand_val(char *value)
+   char *end = value;
+   bool is_var = false;
+ 
++  if (!value)
++    return NULL;
++
+   while (*value) {
+     if (*value == '$') {
+       if (start != end) {
+@@ -732,6 +735,10 @@ static void create_entry (struct bls_entry *entry)
+ 
+   title = bls_get_val (entry, "title", NULL);
+   options = expand_val (bls_get_val (entry, "options", NULL));
++
++  if (!options)
++    options = expand_val (grub_env_get("default_kernelopts"));
++
+   initrds = bls_make_list (entry, "initrd", NULL);
+ 
+   hotkey = bls_get_val (entry, "grub_hotkey", NULL);
+diff --git a/util/grub.d/10_linux.in b/util/grub.d/10_linux.in
+index 22a85c69ea0..2547dd52115 100644
+--- a/util/grub.d/10_linux.in
++++ b/util/grub.d/10_linux.in
+@@ -158,6 +158,8 @@ linux_entry ()
+     populate_header_warn
+ 
+     cat << EOF
++set default_kernelopts="root=${linux_root_device_thisversion} ro ${args}"
++
+ insmod blscfg
+ blscfg
+ if [ -s \$prefix/grubenv ]; then

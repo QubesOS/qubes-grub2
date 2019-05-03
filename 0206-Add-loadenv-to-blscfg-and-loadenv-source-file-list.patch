@@ -1,0 +1,39 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Will Thompson <wjt@endlessm.com>
+Date: Fri, 13 Jul 2018 05:51:54 +0100
+Subject: [PATCH] Add loadenv to blscfg and loadenv source file list
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Without this, `make distcheck` fails because loadenv.h is not included
+in the source tarball.
+
+This broke in ‘Add blscfg command support to parse BootLoaderSpec config
+fragments’.
+
+Signed-off-by: Will Thompson <wjt@endlessm.com>
+---
+ grub-core/Makefile.core.def | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/grub-core/Makefile.core.def b/grub-core/Makefile.core.def
+index 2851437e098..aa44d66aca4 100644
+--- a/grub-core/Makefile.core.def
++++ b/grub-core/Makefile.core.def
+@@ -781,6 +781,7 @@ module = {
+ module = {
+   name = blscfg;
+   common = commands/blscfg.c;
++  common = commands/loadenv.h;
+   enable = efi;
+   enable = i386_pc;
+   enable = emu;
+@@ -947,6 +948,7 @@ module = {
+ module = {
+   name = loadenv;
+   common = commands/loadenv.c;
++  common = commands/loadenv.h;
+   common = lib/envblk.c;
+ };
+ 

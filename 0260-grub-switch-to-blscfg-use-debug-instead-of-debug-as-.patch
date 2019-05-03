@@ -1,0 +1,31 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Javier Martinez Canillas <javierm@redhat.com>
+Date: Fri, 19 Oct 2018 18:48:27 +0200
+Subject: [PATCH] grub-switch-to-blscfg: use ~debug instead of -debug as suffix
+ to sort correctly
+
+For the debug BLS entries a -debug suffix was added so they are sorted after
+the kernel entries, but that only works with version sort and not rpm sort.
+
+So instead use ~debug prefix so rpm sort algorithm could sort it correctly.
+
+Related: rhbz#1638103
+
+Signed-off-by: Javier Martinez Canillas <javierm@redhat.com>
+---
+ util/grub-switch-to-blscfg.in | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/util/grub-switch-to-blscfg.in b/util/grub-switch-to-blscfg.in
+index 1c6bd1882a7..60cd6ca63cc 100644
+--- a/util/grub-switch-to-blscfg.in
++++ b/util/grub-switch-to-blscfg.in
+@@ -250,7 +250,7 @@ for kernelver in $(cd /lib/modules/ ; ls -1) "" ; do
+     fi
+ 
+     if [ "x$GRUB_LINUX_MAKE_DEBUG" = "xtrue" ]; then
+-        bls_debug="$(echo ${bls_target} | sed -e "s/\.${arch}/-debug.${arch}/")"
++        bls_debug="$(echo ${bls_target} | sed -e "s/${kernelver}/${kernelver}~debug/")"
+         cp -aT  "${bls_target}" "${bls_debug}"
+         title="$(grep '^title[ \t]' "${bls_debug}" | sed -e 's/^title[ \t]*//')"
+         blsid="$(grep '^id[ \t]' "${bls_debug}" | sed -e "s/\.${ARCH}/-debug.${arch}/")"

@@ -1,0 +1,32 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mark Salter <msalter@redhat.com>
+Date: Tue, 7 Mar 2017 18:26:17 -0500
+Subject: [PATCH] Fix malformed tftp packets
+
+0088-Normalize-slashes-in-tftp-paths.patch collapses multiple contiguous
+slashes in a filename into one slash in the tftp packet filename field.
+However, the packet buffer pointer is advanced using the original name.
+This leaves unitialized data between the name field and the type field
+leading to tftp errors. Use the length of the normalized name to avoid
+this.
+
+Signed-off-by: Mark Salter <msalter@redhat.com>
+---
+ grub-core/net/tftp.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/grub-core/net/tftp.c b/grub-core/net/tftp.c
+index 5ca0a96a6f6..dcd82494309 100644
+--- a/grub-core/net/tftp.c
++++ b/grub-core/net/tftp.c
+@@ -360,8 +360,8 @@ tftp_open (struct grub_file *file, const char *filename)
+   /* Copy and normalize the filename to work-around issues on some tftp
+      servers when file names are being matched for remapping. */
+   grub_normalize_filename (rrq, filename);
+-  rrqlen += grub_strlen (filename) + 1;
+-  rrq += grub_strlen (filename) + 1;
++  rrqlen += grub_strlen (rrq) + 1;
++  rrq += grub_strlen (rrq) + 1;
+ 
+   grub_strcpy (rrq, "octet");
+   rrqlen += grub_strlen ("octet") + 1;

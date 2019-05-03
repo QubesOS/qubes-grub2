@@ -1,0 +1,65 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Andrzej Kacprowski <andrzej.kacprowski@intel.com>
+Date: Fri, 21 Apr 2017 09:20:38 +0200
+Subject: [PATCH] Use xid to match DHCP replies
+
+Transaction identifier (xid) from DHCP request
+packet is stored in network level interface and used
+to match request with the responses it generates.
+
+Resolves: rhbz#1370642
+
+Signed-off-by: Andrzej Kacprowski <andrzej.kacprowski@intel.com>
+---
+ grub-core/net/bootp.c | 3 ++-
+ grub-core/net/ip.c    | 1 +
+ include/grub/net.h    | 3 ++-
+ 3 files changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/grub-core/net/bootp.c b/grub-core/net/bootp.c
+index da3e454466b..2869482fe06 100644
+--- a/grub-core/net/bootp.c
++++ b/grub-core/net/bootp.c
+@@ -777,7 +777,8 @@ grub_cmd_bootp (struct grub_command *cmd __attribute__ ((unused)),
+ 	      grub_errno = GRUB_ERR_NONE;
+ 	      t = 0;
+ 	    }
+-	  pack->ident = grub_cpu_to_be32 (t);
++	  pack->xid = grub_cpu_to_be32 (t);
++	  ifaces[j].dhcp_xid = pack->xid;
+ 	  pack->seconds = grub_cpu_to_be16 (t);
+ 
+ 	  grub_memcpy (&pack->mac_addr, &ifaces[j].hwaddress.mac, 6); 
+diff --git a/grub-core/net/ip.c b/grub-core/net/ip.c
+index 7c95cc7464a..8411e0ecca3 100644
+--- a/grub-core/net/ip.c
++++ b/grub-core/net/ip.c
+@@ -275,6 +275,7 @@ handle_dgram (struct grub_net_buff *nb,
+ 	FOR_NET_NETWORK_LEVEL_INTERFACES (inf)
+ 	  if (inf->card == card
+ 	      && inf->address.type == GRUB_NET_NETWORK_LEVEL_PROTOCOL_DHCP_RECV
++	      && inf->dhcp_xid == bootp->xid
+ 	      && inf->hwaddress.type == GRUB_NET_LINK_LEVEL_PROTOCOL_ETHERNET
+ 	      && grub_memcmp (inf->hwaddress.mac, &bootp->mac_addr,
+ 			      sizeof (inf->hwaddress.mac)) == 0)
+diff --git a/include/grub/net.h b/include/grub/net.h
+index f8f3ec13acc..de51894cbbf 100644
+--- a/include/grub/net.h
++++ b/include/grub/net.h
+@@ -292,6 +292,7 @@ struct grub_net_network_level_interface
+   struct grub_net_bootp_packet *dhcp_ack;
+   grub_size_t dhcp_acklen;
+   grub_uint16_t vlantag;
++  grub_uint32_t dhcp_xid;
+   void *data;
+ };
+ 
+@@ -429,7 +430,7 @@ struct grub_net_bootp_packet
+   grub_uint8_t hw_type;		/* hardware type.  */
+   grub_uint8_t hw_len;		/* hardware addr len.  */
+   grub_uint8_t gate_hops;	/* zero it.  */
+-  grub_uint32_t ident;		/* random number chosen by client.  */
++  grub_uint32_t xid;		/* transaction id chosen by client.  */
+   grub_uint16_t seconds;	/* seconds since did initial bootstrap.  */
+   grub_uint16_t flags;
+   grub_uint32_t	client_ip;

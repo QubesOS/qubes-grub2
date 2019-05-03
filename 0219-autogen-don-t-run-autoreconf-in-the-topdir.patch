@@ -1,0 +1,21 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Peter Jones <pjones@redhat.com>
+Date: Thu, 26 Jul 2018 15:47:48 -0400
+Subject: [PATCH] autogen: don't run autoreconf in the topdir
+
+Signed-off-by: Peter Jones <pjones@redhat.com>
+---
+ autogen.sh | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/autogen.sh b/autogen.sh
+index 7537561ad0d..f608b9467a0 100755
+--- a/autogen.sh
++++ b/autogen.sh
+@@ -82,6 +82,4 @@ done
+ echo "Saving timestamps..."
+ echo timestamp > stamp-h.in
+ 
+-echo "Running autoreconf..."
+-autoreconf -vi
+ exit 0

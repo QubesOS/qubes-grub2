@@ -1,0 +1,48 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Javier Martinez Canillas <javierm@redhat.com>
+Date: Wed, 18 Jul 2018 08:07:37 +0200
+Subject: [PATCH] grub-switch-to-blscfg: Only fix boot prefix for non-generated
+ BLS files
+
+The BLS files are either copied from /lib/modules/$kernelver/bls.conf or
+generated if this file doesn't exist. The shipped bls.conf default path
+for the kernel and initramfs is relative to the boot partition.
+
+But in some setups /boot may not be a mount point so in that case the
+boot prefix has to be added to the BLS. But we already provide this
+prefix for generated BLS files so attempting to add a boot prefix will
+lead to a path that contains the boot prefix twice (i.e: /boot/boot).
+
+Reported-by: Hans de Goede <hdegoede@redhat.com>
+Signed-off-by: Javier Martinez Canillas <javierm@redhat.com>
+---
+ util/grub-switch-to-blscfg.in | 9 ++++-----
+ 1 file changed, 4 insertions(+), 5 deletions(-)
+
+diff --git a/util/grub-switch-to-blscfg.in b/util/grub-switch-to-blscfg.in
+index 40612e00686..9cf64f8e725 100644
+--- a/util/grub-switch-to-blscfg.in
++++ b/util/grub-switch-to-blscfg.in
+@@ -236,6 +236,10 @@ for kernelver in $(cd /lib/modules/ ; ls -1) "" ; do
+ 
+     if [ -f "${kernel_dir}/bls.conf" ] ; then
+         cp -af "${kernel_dir}/bls.conf" "${bls_target}"
++        if [ -n "${bootprefix}" ]; then
++            sed -i -e "s,^\(linux[^ \t]*[ \t]\+\).*,\1${bootprefix}${linux},g" "${bls_target}"
++            sed -i -e "/^initrd/ s,\([ \t]\+\)\([^ \t]\+\),\1${bootprefix}\2,g" "${bls_target}"
++        fi
+     else
+         mkbls "${kernelver}" \
+             "$(date -u +%Y%m%d%H%M%S -d "$(stat -c '%y' "${kernel_dir}")")" \
+@@ -243,11 +247,6 @@ for kernelver in $(cd /lib/modules/ ; ls -1) "" ; do
+             >"${bls_target}"
+     fi
+ 
+-    if [ -n "${bootprefix}" ]; then
+-        sed -i -e "s,^\(linux[^ \t]*[ \t]\+\).*,\1${bootprefix}${linux},g" "${bls_target}"
+-        sed -i -e "/^initrd/ s,\([ \t]\+\)\([^ \t]\+\),\1${bootprefix}\2,g" "${bls_target}"
+-    fi
+-
+     if [ "x$GRUB_LINUX_MAKE_DEBUG" = "xtrue" ]; then
+         arch="$(uname -m)"
+         bls_debug="$(echo ${bls_target} | sed -e "s/\.${arch}/-debug.${arch}/")"

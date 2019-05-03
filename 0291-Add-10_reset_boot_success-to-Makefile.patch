@@ -1,0 +1,29 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Javier Martinez Canillas <javierm@redhat.com>
+Date: Thu, 18 Apr 2019 19:16:18 +0200
+Subject: [PATCH] Add 10_reset_boot_success to Makefile
+
+This was missing in a previous commit that added this script.
+
+Signed-off-by: Javier Martinez Canillas <javierm@redhat.com>
+---
+ Makefile.util.def | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/Makefile.util.def b/Makefile.util.def
+index cae6002d2e3..5062a0e50fa 100644
+--- a/Makefile.util.def
++++ b/Makefile.util.def
+@@ -515,6 +515,12 @@ script = {
+   condition = COND_HOST_LINUX;
+ };
+ 
++script = {
++  name = '10_reset_boot_success';
++  common = util/grub.d/10_reset_boot_success.in;
++  installdir = grubconf;
++};
++
+ script = {
+   name = '10_xnu';
+   common = util/grub.d/10_xnu.in;

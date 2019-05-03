@@ -1,0 +1,38 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Javier Martinez Canillas <javierm@redhat.com>
+Date: Wed, 21 Nov 2018 15:38:50 +0100
+Subject: [PATCH] blscfg: expand grub_users before passing to
+ grub_normal_add_menu_entry()
+
+The "grub_users" field from the BLS snippet file is used to specifcy the
+users that are allowed to execute a given menu entry if the "superusers"
+environment variable is set.
+
+If the "grub_users" isn't set, the menu entry is unrestricted and it can
+be executed without any authentication and if is set then only the users
+defined in "grub_users" can execute the menu entry after authentication.
+
+But this field can contain an environment variable so has to be expanded
+or otherwise grub2 will wrongly assume that the user is "$var", and will
+populate a menu entry that it's resctrited even when "$var" isn't set.
+
+Resolves: rhbz#1650706
+
+Signed-off-by: Javier Martinez Canillas <javierm@redhat.com>
+---
+ grub-core/commands/blscfg.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/grub-core/commands/blscfg.c b/grub-core/commands/blscfg.c
+index 42892cbfd55..c432c6ba27a 100644
+--- a/grub-core/commands/blscfg.c
++++ b/grub-core/commands/blscfg.c
+@@ -704,7 +704,7 @@ static void create_entry (struct bls_entry *entry)
+   initrds = bls_make_list (entry, "initrd", NULL);
+ 
+   hotkey = bls_get_val (entry, "grub_hotkey", NULL);
+-  users = bls_get_val (entry, "grub_users", NULL);
++  users = expand_val (bls_get_val (entry, "grub_users", NULL));
+   classes = bls_make_list (entry, "grub_class", NULL);
+   args = bls_make_list (entry, "grub_arg", &argc);
+ 

@@ -1,0 +1,69 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Hans de Goede <hdegoede@redhat.com>
+Date: Fri, 14 Sep 2018 16:39:40 +0200
+Subject: [PATCH] docs: Stop using polkit / pkexec for grub-boot-success.timer
+ / service
+
+We also want to call grub2-set-bootflag under gdm and pkexec does not
+work under gdm because the gdm user has /sbin/nologin as shell.
+
+So instead we are going to install grub2-set-bootflag as suid root,
+grub2-set-bootflag was written with this usage in mind, so is safe
+to be made suid root.
+
+Signed-off-by: Hans de Goede <hdegoede@redhat.com>
+---
+ docs/grub-boot-success.service |  2 +-
+ docs/grub-boot-success.timer   |  1 -
+ docs/org.gnu.grub.policy       | 20 --------------------
+ 3 files changed, 1 insertion(+), 22 deletions(-)
+ delete mode 100644 docs/org.gnu.grub.policy
+
+diff --git a/docs/grub-boot-success.service b/docs/grub-boot-success.service
+index c8c91c34d49..80e79584c91 100644
+--- a/docs/grub-boot-success.service
++++ b/docs/grub-boot-success.service
+@@ -3,4 +3,4 @@ Description=Mark boot as successful
+ 
+ [Service]
+ Type=oneshot
+-ExecStart=/usr/bin/pkexec /usr/sbin/grub2-set-bootflag boot_success
++ExecStart=/usr/sbin/grub2-set-bootflag boot_success
+diff --git a/docs/grub-boot-success.timer b/docs/grub-boot-success.timer
+index 67bd829b795..5d8fcba21aa 100644
+--- a/docs/grub-boot-success.timer
++++ b/docs/grub-boot-success.timer
+@@ -1,7 +1,6 @@
+ [Unit]
+ Description=Mark boot as successful after the user session has run 2 minutes
+ ConditionUser=!@system
+-ConditionPathExists=/usr/bin/pkexec
+ 
+ [Timer]
+ OnActiveSec=2min
+diff --git a/docs/org.gnu.grub.policy b/docs/org.gnu.grub.policy
+deleted file mode 100644
+index 18391efc8e7..00000000000
+--- a/docs/org.gnu.grub.policy
++++ /dev/null
+@@ -1,20 +0,0 @@
+-<?xml version="1.0" encoding="UTF-8"?>
+-<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN" "http://www.freedesktop.org/standards/PolicyKit/1.0/policyconfig.dtd">
+-<policyconfig>
+-  <vendor>GNU GRUB</vendor>
+-  <vendor_url>https://www.gnu.org/software/grub/</vendor_url>
+-  <action id="org.gnu.grub.set-bootflag">
+-    <!-- SECURITY:
+-          - A normal active user on the local machine does not need permission
+-            to set bootflags to show the menu / mark current boot successful.
+-     -->
+-    <description>Set GRUB bootflags</description>
+-    <message>Authentication is required to modify the bootloaders bootflags</message>
+-    <defaults>
+-      <allow_any>no</allow_any>
+-      <allow_inactive>no</allow_inactive>
+-      <allow_active>yes</allow_active>
+-    </defaults>
+-    <annotate key="org.freedesktop.policykit.exec.path">/usr/sbin/grub2-set-bootflag</annotate>
+-  </action>
+-</policyconfig>

@@ -1,0 +1,33 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Hans de Goede <hdegoede@redhat.com>
+Date: Mon, 3 Sep 2018 13:01:58 +0200
+Subject: [PATCH] grub-boot-success.timer: Add a few Conditions for running the
+ timer
+
+Add 2 Conditions for running the boot-success timer / service:
+
+1) Do not run it for system users, this fixes errors about gdm not being
+allowed to use pkexec when the greeter session lasts for more then 2 minutes:
+https://bugzilla.redhat.com/show_bug.cgi?id=1592201#c6
+
+2) Do not run the timer when pkexec is not available (on minimal installs)
+since then it will just lead to a bunch of errors without doing anything:
+https://bugzilla.redhat.com/show_bug.cgi?id=1619445
+
+Signed-off-by: Hans de Goede <hdegoede@redhat.com>
+---
+ docs/grub-boot-success.timer | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/docs/grub-boot-success.timer b/docs/grub-boot-success.timer
+index 221b532781b..67bd829b795 100644
+--- a/docs/grub-boot-success.timer
++++ b/docs/grub-boot-success.timer
+@@ -1,5 +1,7 @@
+ [Unit]
+ Description=Mark boot as successful after the user session has run 2 minutes
++ConditionUser=!@system
++ConditionPathExists=/usr/bin/pkexec
+ 
+ [Timer]
+ OnActiveSec=2min

@@ -1,0 +1,40 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Javier Martinez Canillas <javierm@redhat.com>
+Date: Tue, 24 Apr 2018 02:16:38 +0200
+Subject: [PATCH] Only attempt to query dev mounted in /boot/efi as boot dev on
+ EFI machines
+
+The 10_linux script calls grub2-probe to probe the information for the dev
+mounted in /boot/efi, but this directory may not exist on non-EFI machines
+which leads to the following error when generating the grub2 config file:
+
+/usr/sbin/grub2-probe: error: failed to get canonical path of `/boot/efi/'
+
+Instead query for the device mounted in /boot and use that as the boot dev
+for non-EFI machines.
+
+Signed-off-by: Javier Martinez Canillas <javierm@redhat.com>
+---
+ util/grub.d/10_linux.in | 9 +++++++--
+ 1 file changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/util/grub.d/10_linux.in b/util/grub.d/10_linux.in
+index 89cd71d852d..61d0664fb5c 100644
+--- a/util/grub.d/10_linux.in
++++ b/util/grub.d/10_linux.in
+@@ -133,8 +133,13 @@ linux_entry ()
+       fi
+     fi
+ 
+-    bootefi_device="`${grub_probe} --target=device /boot/efi/`"
+-    prepare_grub_to_access_device ${bootefi_device} boot
++    if [ -d /sys/firmware/efi ]; then
++        bootefi_device="`${grub_probe} --target=device /boot/efi/`"
++        prepare_grub_to_access_device ${bootefi_device} boot
++    else
++        boot_device="`${grub_probe} --target=device /boot/`"
++        prepare_grub_to_access_device ${boot_device} boot
++    fi
+ 
+     cat << EOF
+ insmod blscfg

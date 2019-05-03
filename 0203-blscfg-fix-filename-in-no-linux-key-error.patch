@@ -1,0 +1,47 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Will Thompson <wjt@endlessm.com>
+Date: Thu, 12 Jul 2018 10:38:27 +0100
+Subject: [PATCH] blscfg: fix filename in "no 'linux' key" error
+
+In find_entry(), 'filename' is either NULL or a directory in the ESP.
+But previously it was passed to create_entry(), which uses it in an
+error message as if it's the filename of the BLS entry in question.
+
+Since bls_entry now has a 'filename' field, just use that.
+
+Signed-off-by: Will Thompson <wjt@endlessm.com>
+---
+ grub-core/commands/blscfg.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/grub-core/commands/blscfg.c b/grub-core/commands/blscfg.c
+index bd78559ef68..a45f40fe67e 100644
+--- a/grub-core/commands/blscfg.c
++++ b/grub-core/commands/blscfg.c
+@@ -514,7 +514,7 @@ static char **bls_make_list (struct bls_entry *entry, const char *key, int *num)
+   return list;
+ }
+ 
+-static void create_entry (struct bls_entry *entry, const char *cfgfile)
++static void create_entry (struct bls_entry *entry)
+ {
+   int argc = 0;
+   const char **argv = NULL;
+@@ -539,7 +539,7 @@ static void create_entry (struct bls_entry *entry, const char *cfgfile)
+   clinux = bls_get_val (entry, "linux", NULL);
+   if (!clinux)
+     {
+-      grub_dprintf ("blscfg", "Skipping file %s with no 'linux' key.\n", cfgfile);
++      grub_dprintf ("blscfg", "Skipping file %s with no 'linux' key.\n", entry->filename);
+       goto finish;
+     }
+ 
+@@ -753,7 +753,7 @@ static int find_entry (const char *filename,
+ 
+   grub_dprintf ("blscfg", "%s Creating %d entries from bls\n", __func__, nentries);
+   for (r = nentries - 1; r >= 0; r--)
+-      create_entry(entries[r], filename);
++      create_entry(entries[r]);
+ 
+   for (r = 0; r < nentries; r++)
+       bls_free_entry (entries[r]);

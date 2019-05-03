@@ -1,0 +1,31 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Dusty Mabe <dusty@dustymabe.com>
+Date: Sat, 18 Jul 2015 15:38:08 +0000
+Subject: [PATCH] No more "Bootable Snapshot" submenu in grub.cfg.
+
+This breaks grubby (run on kernel upgrades) because grubby just
+does a search for "menuentry".
+---
+ util/grub.d/00_header.in | 12 ------------
+ 1 file changed, 12 deletions(-)
+
+diff --git a/util/grub.d/00_header.in b/util/grub.d/00_header.in
+index e2a53300126..8a16fea347e 100644
+--- a/util/grub.d/00_header.in
++++ b/util/grub.d/00_header.in
+@@ -366,15 +366,3 @@ fi
+ if [ "x${GRUB_BADRAM}" != "x" ] ; then
+   echo "badram ${GRUB_BADRAM}"
+ fi
+-
+-if [ "x${SUSE_BTRFS_SNAPSHOT_BOOTING}" = "xtrue" ] &&
+-   [ "x${GRUB_FS}" = "xbtrfs" ] ; then
+-    # Note: No $snapshot_num on *read-only* rollback!  (bsc#901487)
+-    cat <<EOF
+-if [ -n "\$extra_cmdline" ]; then
+-  submenu "Bootable snapshot #\$snapshot_num" {
+-    menuentry "If OK, run 'snapper rollback' and reboot." { true; }
+-  }
+-fi
+-EOF
+-fi

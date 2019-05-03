@@ -1,0 +1,35 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Peter Jones <pjones@redhat.com>
+Date: Thu, 21 Jun 2018 18:32:26 -0400
+Subject: [PATCH] Put back our code to add a local route.
+
+This was removed by the previous patch.
+
+Signed-off-by: Peter Jones <pjones@redhat.com>
+---
+ grub-core/net/bootp.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/grub-core/net/bootp.c b/grub-core/net/bootp.c
+index ff1d7776e7f..242cd1f4cbd 100644
+--- a/grub-core/net/bootp.c
++++ b/grub-core/net/bootp.c
+@@ -976,6 +976,7 @@ grub_net_configure_by_dhcpv6_reply (const char *name,
+ {
+   struct grub_net_network_level_interface *inf;
+   grub_dhcp6_options_t dhcp6;
++  int mask = -1;
+ 
+   dhcp6 = grub_dhcp6_options_get (v6h, size);
+   if (!dhcp6)
+@@ -1007,6 +1008,10 @@ grub_net_configure_by_dhcpv6_reply (const char *name,
+     }
+ 
+   grub_dhcp6_options_free (dhcp6);
++
++  if (inf)
++    grub_net_add_ipv6_local (inf, mask);
++
+   return inf;
+ }
+ 

@@ -1,0 +1,51 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Javier Martinez Canillas <javierm@redhat.com>
+Date: Tue, 12 Feb 2019 00:57:34 +0100
+Subject: [PATCH] Set blsdir if the BLS directory path isn't one of the looked
+ up by default
+
+The blscfg command searches for BLS snippets in the /loader/entries and the
+/boot/loader/entries directories. If the /boot/loader/entries dir real path
+isn't one of these (i.e: if is in a btrfs subvolme), set the blsdir grubenv
+variable so the blscfg command will be able to find the BLS config snippets.
+
+Resolves: rhbz#1657240
+
+Signed-off-by: Javier Martinez Canillas <javierm@redhat.com>
+---
+ util/grub.d/10_linux.in     | 5 +++++
+ util/grub.d/10_linux_bls.in | 5 +++++
+ 2 files changed, 10 insertions(+)
+
+diff --git a/util/grub.d/10_linux.in b/util/grub.d/10_linux.in
+index 9c240f92625..7e80245a151 100644
+--- a/util/grub.d/10_linux.in
++++ b/util/grub.d/10_linux.in
+@@ -166,6 +166,11 @@ fi
+ EOF
+ 
+     if [ "x${GRUB_GRUBENV_UPDATE}" = "xyes" ]; then
++        blsdir=$(make_system_path_relative_to_its_root "/boot/loader/entries")
++        if [ "x${blsdir}" != "x/loader/entries" ] && [ "x${blsdir}" != "x/boot/loader/entries" ]; then
++            ${grub_editenv} - set blsdir="${blsdir}"
++        fi
++
+ 	${grub_editenv} - set kernelopts="root=${linux_root_device_thisversion} ro ${args}"
+ 	if [ -n "${GRUB_EARLY_INITRD_LINUX_CUSTOM}" ]; then
+ 	    ${grub_editenv} - set early_initrd="${GRUB_EARLY_INITRD_LINUX_CUSTOM}"
+diff --git a/util/grub.d/10_linux_bls.in b/util/grub.d/10_linux_bls.in
+index b14951daf82..f0ad9a3da25 100644
+--- a/util/grub.d/10_linux_bls.in
++++ b/util/grub.d/10_linux_bls.in
+@@ -226,6 +226,11 @@ linux_entry ()
+     populate_menu
+ 
+     if [ "x${GRUB_GRUBENV_UPDATE}" = "xyes" ]; then
++        blsdir=$(make_system_path_relative_to_its_root "/boot/loader/entries")
++        if [ "x${blsdir}" != "x/loader/entries" ] && [ "x${blsdir}" != "x/boot/loader/entries" ]; then
++            ${grub_editenv} - set blsdir="${blsdir}"
++        fi
++
+ 	${grub_editenv} - set kernelopts="root=${linux_root_device_thisversion} ro ${args}"
+ 	if [ -n "${GRUB_EARLY_INITRD_LINUX_CUSTOM}" ]; then
+ 	    ${grub_editenv} - set early_initrd="${GRUB_EARLY_INITRD_LINUX_CUSTOM}"

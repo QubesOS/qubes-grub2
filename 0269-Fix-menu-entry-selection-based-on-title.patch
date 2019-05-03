@@ -1,0 +1,41 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Javier Martinez Canillas <javierm@redhat.com>
+Date: Fri, 30 Nov 2018 16:39:09 +0100
+Subject: [PATCH] Fix menu entry selection based on title
+
+The get_entry_number_helper() function assumes that there could be a set
+of entries identifiers in a variable (i.e: as used in the fallback case)
+so iterates over the string until it finds a space to get the first id.
+
+But this should only be done for indexes or entries id, since the title
+can contain spaces. In the case of title, the complete string should be
+used to select a given entry.
+
+Resolves: rhbz#1654936
+
+Signed-off-by: Javier Martinez Canillas <javierm@redhat.com>
+---
+ grub-core/normal/menu.c | 7 ++-----
+ 1 file changed, 2 insertions(+), 5 deletions(-)
+
+diff --git a/grub-core/normal/menu.c b/grub-core/normal/menu.c
+index 95f7abaf2fd..fc25c702f3c 100644
+--- a/grub-core/normal/menu.c
++++ b/grub-core/normal/menu.c
+@@ -217,14 +217,11 @@ get_entry_number_helper(grub_menu_t menu,
+ 
+   for (i = 0, e = menu->entry_list; e; i++)
+     {
+-      int l = 0;
+-      while (val[l] && !grub_isspace(val[l]))
+-	l++;
+ 
+-      if (menuentry_eq (e->title, val, l))
++      if (menuentry_eq (e->title, val, -1))
+ 	{
+ 	  if (tail)
+-	    *tail = val + l;
++	    *tail = NULL;
+ 	  return i;
+ 	}
+       e = e->next;

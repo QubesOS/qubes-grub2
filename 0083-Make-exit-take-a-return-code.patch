@@ -1,0 +1,53 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Peter Jones <pjones@redhat.com>
+Date: Wed, 26 Feb 2014 21:49:12 -0500
+Subject: [PATCH] Make "exit" take a return code.
+
+This adds "exit" with a return code.  With this patch, any "exit"
+command /may/ include a return code, and on platforms that support
+returning with an exit status, we will do so.  By default we return the
+same exit status we did before this patch.
+
+Signed-off-by: Peter Jones <pjones@redhat.com>
+---
+ grub-core/kern/emu/main.c | 6 ++++++
+ grub-core/kern/misc.c     | 9 +++++++++
+ 2 files changed, 15 insertions(+)
+
+diff --git a/grub-core/kern/emu/main.c b/grub-core/kern/emu/main.c
+index 55ea5a11ccd..7e47ec81263 100644
+--- a/grub-core/kern/emu/main.c
++++ b/grub-core/kern/emu/main.c
+@@ -72,6 +72,12 @@ grub_exit (int retval __attribute__((unused)))
+   grub_reboot ();
+ }
+ 
++void
++grub_exit (int retval __attribute__((unused)))
++{
++  grub_reboot ();
++}
++
+ void
+ grub_machine_init (void)
+ {
+diff --git a/grub-core/kern/misc.c b/grub-core/kern/misc.c
+index 5ce89a40c68..04371ac49f2 100644
+--- a/grub-core/kern/misc.c
++++ b/grub-core/kern/misc.c
+@@ -1120,6 +1120,15 @@ grub_abort (void)
+   grub_exit (1);
+ }
+ 
++#if defined (__clang__) && !defined (GRUB_UTIL)
++/* clang emits references to abort().  */
++void __attribute__ ((noreturn))
++abort (void)
++{
++  grub_abort ();
++}
++#endif
++
+ void
+ grub_fatal (const char *fmt, ...)
+ {

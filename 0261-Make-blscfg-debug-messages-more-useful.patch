@@ -1,0 +1,175 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Peter Jones <pjones@redhat.com>
+Date: Fri, 19 Oct 2018 10:03:28 -0400
+Subject: [PATCH] Make blscfg debug messages more useful
+
+Related: rhbz#1640979
+Signed-off-by: Peter Jones <pjones@redhat.com>
+---
+ grub-core/commands/blscfg.c    | 12 +++++-------
+ grub-core/commands/legacycfg.c |  4 ++--
+ grub-core/commands/menuentry.c | 18 ++++++++++++++----
+ include/grub/normal.h          |  2 +-
+ 4 files changed, 22 insertions(+), 14 deletions(-)
+
+diff --git a/grub-core/commands/blscfg.c b/grub-core/commands/blscfg.c
+index 347128c9ddd..42892cbfd55 100644
+--- a/grub-core/commands/blscfg.c
++++ b/grub-core/commands/blscfg.c
+@@ -46,8 +46,6 @@ GRUB_MOD_LICENSE ("GPLv3+");
+ #define GRUB_BOOT_DEVICE "($root)"
+ #endif
+ 
+-#define grub_free(x) ({grub_dprintf("blscfg", "%s freeing %p\n", __func__, x); grub_free(x); })
+-
+ struct keyval
+ {
+   const char *key;
+@@ -134,7 +132,7 @@ static int bls_add_keyval(struct bls_entry *entry, char *key, char *val)
+   kv->val = v;
+ 
+   entry->keyvals[entry->nkeyvals] = kv;
+-  grub_dprintf("blscfg", "new keyval at %p:%p:%p\n", entry->keyvals[entry->nkeyvals], k, v);
++  grub_dprintf("blscfg", "new keyval at %p:%s:%s\n", entry->keyvals[entry->nkeyvals], k, v);
+   entry->nkeyvals = new_n;
+ 
+   return 0;
+@@ -144,7 +142,6 @@ static void bls_free_entry(struct bls_entry *entry)
+ {
+   int i;
+ 
+-  grub_dprintf("blscfg", "%s got here\n", __func__);
+   for (i = 0; i < entry->nkeyvals; i++)
+     {
+       struct keyval *kv = entry->keyvals[i];
+@@ -206,7 +203,7 @@ static int vercmp(const char * a, const char * b)
+     int isnum;
+     int ret = 0;
+ 
+-    grub_dprintf("blscfg", "%s got here\n", __func__);
++    grub_dprintf("blscfg", "%s comparing %s and %s\n", __func__, a, b);
+     if (!grub_strcmp(a, b))
+ 	    return 0;
+ 
+@@ -682,7 +679,7 @@ static void create_entry (struct bls_entry *entry)
+   char **args = NULL;
+ 
+   char *src = NULL;
+-  int i;
++  int i, index;
+ 
+   grub_dprintf("blscfg", "%s got here\n", __func__);
+   clinux = bls_get_val (entry, "linux", NULL);
+@@ -756,7 +753,8 @@ static void create_entry (struct bls_entry *entry)
+ 			GRUB_BOOT_DEVICE, clinux, options ? " " : "", options ? options : "",
+ 			initrd ? initrd : "");
+ 
+-  grub_normal_add_menu_entry (argc, argv, classes, id, users, hotkey, NULL, src, 0);
++  grub_normal_add_menu_entry (argc, argv, classes, id, users, hotkey, NULL, src, 0, &index);
++  grub_dprintf ("blscfg", "Added entry %d id:\"%s\"\n", index, id);
+ 
+ finish:
+   grub_free (initrd);
+diff --git a/grub-core/commands/legacycfg.c b/grub-core/commands/legacycfg.c
+index b32f3c74cb1..f9d7627bdc3 100644
+--- a/grub-core/commands/legacycfg.c
++++ b/grub-core/commands/legacycfg.c
+@@ -133,7 +133,7 @@ legacy_file (const char *filename)
+ 	    args[0] = oldname;
+ 	    grub_normal_add_menu_entry (1, args, NULL, NULL, "legacy",
+ 					NULL, NULL,
+-					entrysrc, 0);
++					entrysrc, 0, NULL);
+ 	    grub_free (args);
+ 	    entrysrc[0] = 0;
+ 	    grub_free (oldname);
+@@ -186,7 +186,7 @@ legacy_file (const char *filename)
+ 	}
+       args[0] = entryname;
+       grub_normal_add_menu_entry (1, args, NULL, NULL, NULL,
+-				  NULL, NULL, entrysrc, 0);
++				  NULL, NULL, entrysrc, 0, NULL);
+       grub_free (args);
+     }
+ 
+diff --git a/grub-core/commands/menuentry.c b/grub-core/commands/menuentry.c
+index 2c5363da7f5..8d242b0187e 100644
+--- a/grub-core/commands/menuentry.c
++++ b/grub-core/commands/menuentry.c
+@@ -78,7 +78,7 @@ grub_normal_add_menu_entry (int argc, const char **args,
+ 			    char **classes, const char *id,
+ 			    const char *users, const char *hotkey,
+ 			    const char *prefix, const char *sourcecode,
+-			    int submenu)
++			    int submenu, int *index)
+ {
+   int menu_hotkey = 0;
+   char **menu_args = NULL;
+@@ -149,9 +149,12 @@ grub_normal_add_menu_entry (int argc, const char **args,
+   if (! menu_title)
+     goto fail;
+ 
++  grub_dprintf ("menu", "id:\"%s\"\n", id);
++  grub_dprintf ("menu", "title:\"%s\"\n", menu_title);
+   menu_id = grub_strdup (id ? : menu_title);
+   if (! menu_id)
+     goto fail;
++  grub_dprintf ("menu", "menu_id:\"%s\"\n", menu_id);
+ 
+   /* Save argc, args to pass as parameters to block arg later. */
+   menu_args = grub_malloc (sizeof (char*) * (argc + 1));
+@@ -170,8 +173,12 @@ grub_normal_add_menu_entry (int argc, const char **args,
+   }
+ 
+   /* Add the menu entry at the end of the list.  */
++  int ind=0;
+   while (*last)
+-    last = &(*last)->next;
++    {
++      ind++;
++      last = &(*last)->next;
++    }
+ 
+   *last = grub_zalloc (sizeof (**last));
+   if (! *last)
+@@ -190,6 +197,8 @@ grub_normal_add_menu_entry (int argc, const char **args,
+   (*last)->submenu = submenu;
+ 
+   menu->size++;
++  if (index)
++    *index = ind;
+   return GRUB_ERR_NONE;
+ 
+  fail:
+@@ -286,7 +295,8 @@ grub_cmd_menuentry (grub_extcmd_context_t ctxt, int argc, char **args)
+ 				       users,
+ 				       ctxt->state[2].arg, 0,
+ 				       ctxt->state[3].arg,
+-				       ctxt->extcmd->cmd->name[0] == 's');
++				       ctxt->extcmd->cmd->name[0] == 's',
++				       NULL);
+ 
+   src = args[argc - 1];
+   args[argc - 1] = NULL;
+@@ -303,7 +313,7 @@ grub_cmd_menuentry (grub_extcmd_context_t ctxt, int argc, char **args)
+ 				  ctxt->state[0].args, ctxt->state[4].arg,
+ 				  users,
+ 				  ctxt->state[2].arg, prefix, src + 1,
+-				  ctxt->extcmd->cmd->name[0] == 's');
++				  ctxt->extcmd->cmd->name[0] == 's', NULL);
+ 
+   src[len - 1] = ch;
+   args[argc - 1] = src;
+diff --git a/include/grub/normal.h b/include/grub/normal.h
+index 218cbabccaf..cb9901f41b3 100644
+--- a/include/grub/normal.h
++++ b/include/grub/normal.h
+@@ -145,7 +145,7 @@ grub_normal_add_menu_entry (int argc, const char **args, char **classes,
+ 			    const char *id,
+ 			    const char *users, const char *hotkey,
+ 			    const char *prefix, const char *sourcecode,
+-			    int submenu);
++			    int submenu, int *index);
+ 
+ grub_err_t
+ grub_normal_set_password (const char *user, const char *password);

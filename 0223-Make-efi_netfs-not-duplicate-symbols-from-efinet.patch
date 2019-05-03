@@ -1,0 +1,27 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Peter Jones <pjones@redhat.com>
+Date: Wed, 11 Jul 2018 13:50:00 -0400
+Subject: [PATCH] Make efi_netfs not duplicate symbols from efinet
+
+Signed-off-by: Peter Jones <pjones@redhat.com>
+---
+ grub-core/Makefile.core.def | 6 ------
+ 1 file changed, 6 deletions(-)
+
+diff --git a/grub-core/Makefile.core.def b/grub-core/Makefile.core.def
+index d3e3bfd4d7a..715d3a3ec02 100644
+--- a/grub-core/Makefile.core.def
++++ b/grub-core/Makefile.core.def
+@@ -2186,12 +2186,6 @@ module = {
+ module = {
+   name = efi_netfs;
+   common = net/efi/efi_netfs.c;
+-  common = net/efi/net.c;
+-  common = net/efi/http.c;
+-  common = net/efi/pxe.c;
+-  common = net/efi/ip4_config.c;
+-  common = net/efi/ip6_config.c;
+-  common = net/efi/dhcp.c;
+   enable = efi;
+ };
+ 

@@ -1,0 +1,22 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Peter Jones <pjones@redhat.com>
+Date: Wed, 11 Jul 2018 13:43:34 -0400
+Subject: [PATCH] gentpl: add 'pc' firmware type
+
+Signed-off-by: Peter Jones <pjones@redhat.com>
+---
+ gentpl.py | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/gentpl.py b/gentpl.py
+index a8cd540550f..baac6a2af69 100644
+--- a/gentpl.py
++++ b/gentpl.py
+@@ -49,6 +49,7 @@ GROUPS["arm"]      = [ "arm_uboot", "arm_efi", "arm_coreboot" ]
+ GROUPS["arm64"]    = [ "arm64_efi" ]
+ 
+ # Groups based on firmware
++GROUPS["pc"] = [ "i386_pc" ]
+ GROUPS["efi"]  = [ "i386_efi", "x86_64_efi", "ia64_efi", "arm_efi", "arm64_efi" ]
+ GROUPS["ieee1275"]   = [ "i386_ieee1275", "sparc64_ieee1275", "powerpc_ieee1275" ]
+ GROUPS["uboot"] = [ "arm_uboot" ]

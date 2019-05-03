@@ -1,0 +1,392 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Peter Jones <pjones@redhat.com>
+Date: Tue, 11 Sep 2018 16:41:30 -0400
+Subject: [PATCH] Attempt to fix up all the places -Wsign-compare=error finds.
+
+Signed-off-by: Peter Jones <pjones@redhat.com>
+---
+ grub-core/gnulib/regcomp.c        |  4 ++--
+ grub-core/gnulib/regex_internal.c |  6 +++---
+ grub-core/gnulib/regexec.c        | 20 ++++++++++----------
+ grub-core/kern/emu/misc.c         |  2 +-
+ grub-core/lib/reed_solomon.c      |  4 ++--
+ grub-core/osdep/linux/blocklist.c |  2 +-
+ grub-core/osdep/linux/getroot.c   |  2 +-
+ grub-core/osdep/linux/hostdisk.c  |  2 +-
+ util/grub-fstest.c                |  2 +-
+ util/grub-menulst2cfg.c           |  2 +-
+ util/grub-mkfont.c                | 13 +++++++------
+ util/grub-probe.c                 |  2 +-
+ util/grub-rpm-sort.c              |  2 +-
+ util/setup.c                      |  2 +-
+ grub-core/gnulib/regex.h          |  2 +-
+ grub-core/gnulib/regex_internal.h |  4 ++--
+ 16 files changed, 36 insertions(+), 35 deletions(-)
+
+diff --git a/grub-core/gnulib/regcomp.c b/grub-core/gnulib/regcomp.c
+index 596e0cf3ef7..e0ebd8d497a 100644
+--- a/grub-core/gnulib/regcomp.c
++++ b/grub-core/gnulib/regcomp.c
+@@ -334,7 +334,7 @@ re_compile_fastmap_iter (regex_t *bufp, const re_dfastate_t *init_state,
+ 		*p++ = dfa->nodes[node].opr.c;
+ 	      memset (&state, '\0', sizeof (state));
+ 	      if (__mbrtowc (&wc, (const char *) buf, p - buf,
+-			     &state) == p - buf
++			     &state) == (size_t)(p - buf)
+ 		  && (__wcrtomb ((char *) buf, towlower (wc), &state)
+ 		      != (size_t) -1))
+ 		re_set_fastmap (fastmap, false, buf[0]);
+@@ -3760,7 +3760,7 @@ fetch_number (re_string_t *input, re_token_t *token, reg_syntax_t syntax)
+ 	      || num == REG_ERROR)
+ 	     ? REG_ERROR
+ 	     : num == REG_MISSING
+-	     ? c - '0'
++	     ? (Idx)(c - '0')
+ 	     : MIN (RE_DUP_MAX + 1, num * 10 + c - '0'));
+     }
+   return num;
+diff --git a/grub-core/gnulib/regex_internal.c b/grub-core/gnulib/regex_internal.c
+index 899b0ae67e1..836ea5d0ca7 100644
+--- a/grub-core/gnulib/regex_internal.c
++++ b/grub-core/gnulib/regex_internal.c
+@@ -224,7 +224,7 @@ build_wcs_buffer (re_string_t *pstr)
+       /* Apply the translation if we need.  */
+       if (BE (pstr->trans != NULL, 0))
+ 	{
+-	  int i, ch;
++	  unsigned int i, ch;
+ 
+ 	  for (i = 0; i < pstr->mb_cur_max && i < remain_len; ++i)
+ 	    {
+@@ -367,7 +367,7 @@ build_wcs_upper_buffer (re_string_t *pstr)
+ 	prev_st = pstr->cur_state;
+ 	if (BE (pstr->trans != NULL, 0))
+ 	  {
+-	    int i, ch;
++	    unsigned int i, ch;
+ 
+ 	    for (i = 0; i < pstr->mb_cur_max && i < remain_len; ++i)
+ 	      {
+@@ -751,7 +751,7 @@ re_string_reconstruct (re_string_t *pstr, Idx idx, int eflags)
+ 			  memset (&cur_state, 0, sizeof (cur_state));
+ 			  mbclen = __mbrtowc (&wc2, (const char *) pp, mlen,
+ 					      &cur_state);
+-			  if (raw + offset - p <= mbclen
++			  if ((size_t)(raw + offset - p) <= mbclen
+ 			      && mbclen < (size_t) -2)
+ 			    {
+ 			      memset (&pstr->cur_state, '\0',
+diff --git a/grub-core/gnulib/regexec.c b/grub-core/gnulib/regexec.c
+index a7776f088f2..402a85c9c6a 100644
+--- a/grub-core/gnulib/regexec.c
++++ b/grub-core/gnulib/regexec.c
+@@ -490,7 +490,7 @@ re_search_stub (struct re_pattern_buffer *bufp,
+     {
+       if (ret_len)
+ 	{
+-	  assert (pmatch[0].rm_so == start);
++	  assert (pmatch[0].rm_so == (long)start);
+ 	  rval = pmatch[0].rm_eo - start;
+ 	}
+       else
+@@ -928,11 +928,11 @@ re_search_internal (const regex_t *preg,
+ 	    if (BE (mctx.input.offsets_needed != 0, 0))
+ 	      {
+ 		pmatch[reg_idx].rm_so =
+-		  (pmatch[reg_idx].rm_so == mctx.input.valid_len
++		  (pmatch[reg_idx].rm_so == (long)mctx.input.valid_len
+ 		   ? mctx.input.valid_raw_len
+ 		   : mctx.input.offsets[pmatch[reg_idx].rm_so]);
+ 		pmatch[reg_idx].rm_eo =
+-		  (pmatch[reg_idx].rm_eo == mctx.input.valid_len
++		  (pmatch[reg_idx].rm_eo == (long)mctx.input.valid_len
+ 		   ? mctx.input.valid_raw_len
+ 		   : mctx.input.offsets[pmatch[reg_idx].rm_eo]);
+ 	      }
+@@ -1472,11 +1472,11 @@ set_regs (const regex_t *preg, const re_match_context_t *mctx, size_t nmatch,
+     }
+   memcpy (prev_idx_match, pmatch, sizeof (regmatch_t) * nmatch);
+ 
+-  for (idx = pmatch[0].rm_so; idx <= pmatch[0].rm_eo ;)
++  for (idx = pmatch[0].rm_so; idx <= (long)pmatch[0].rm_eo ;)
+     {
+       update_regs (dfa, pmatch, prev_idx_match, cur_node, idx, nmatch);
+ 
+-      if (idx == pmatch[0].rm_eo && cur_node == mctx->last_node)
++      if (idx == (long)pmatch[0].rm_eo && cur_node == mctx->last_node)
+ 	{
+ 	  Idx reg_idx;
+ 	  if (fs)
+@@ -1575,7 +1575,7 @@ update_regs (const re_dfa_t *dfa, regmatch_t *pmatch,
+       if (reg_num < nmatch)
+ 	{
+ 	  /* We are at the last node of this sub expression.  */
+-	  if (pmatch[reg_num].rm_so < cur_idx)
++	  if (pmatch[reg_num].rm_so < (long)cur_idx)
+ 	    {
+ 	      pmatch[reg_num].rm_eo = cur_idx;
+ 	      /* This is a non-empty match or we are not inside an optional
+@@ -3006,7 +3006,7 @@ check_arrival (re_match_context_t *mctx, state_array_t *path, Idx top_node,
+       mctx->state_log[str_idx] = cur_state;
+     }
+ 
+-  for (null_cnt = 0; str_idx < last_str && null_cnt <= mctx->max_mb_elem_len;)
++  for (null_cnt = 0; str_idx < last_str && null_cnt <= (long)mctx->max_mb_elem_len;)
+     {
+       re_node_set_empty (&next_nodes);
+       if (mctx->state_log[str_idx + 1])
+@@ -3786,7 +3786,7 @@ check_node_accept_bytes (const re_dfa_t *dfa, Idx node_idx,
+ 			 const re_string_t *input, Idx str_idx)
+ {
+   const re_token_t *node = dfa->nodes + node_idx;
+-  int char_len, elem_len;
++  unsigned int char_len, elem_len;
+   Idx i;
+ 
+   if (BE (node->type == OP_UTF8_PERIOD, 0))
+@@ -4144,7 +4144,7 @@ extend_buffers (re_match_context_t *mctx, int min_len)
+   /* Double the lengths of the buffers, but allocate at least MIN_LEN.  */
+   ret = re_string_realloc_buffers (pstr,
+ 				   MAX (min_len,
+-					MIN (pstr->len, pstr->bufs_len * 2)));
++					MIN ((long)pstr->len, (long)(pstr->bufs_len * 2))));
+   if (BE (ret != REG_NOERROR, 0))
+     return ret;
+ 
+@@ -4316,7 +4316,7 @@ match_ctx_add_entry (re_match_context_t *mctx, Idx node, Idx str_idx, Idx from,
+     = (from == to ? -1 : 0);
+ 
+   mctx->bkref_ents[mctx->nbkref_ents++].more = 0;
+-  if (mctx->max_mb_elem_len < to - from)
++  if (mctx->max_mb_elem_len < (long)(to - from))
+     mctx->max_mb_elem_len = to - from;
+   return REG_NOERROR;
+ }
+diff --git a/grub-core/kern/emu/misc.c b/grub-core/kern/emu/misc.c
+index 3d3a4a4a975..9367caf763c 100644
+--- a/grub-core/kern/emu/misc.c
++++ b/grub-core/kern/emu/misc.c
+@@ -175,7 +175,7 @@ grub_util_get_image_size (const char *path)
+   sz = ftello (f);
+   if (sz < 0)
+     grub_util_error (_("cannot open `%s': %s"), path, strerror (errno));
+-  if (sz != (size_t) sz)
++  if (sz > (off_t)(GRUB_SIZE_MAX >> 1))
+     grub_util_error (_("file `%s' is too big"), path);
+   ret = (size_t) sz;
+ 
+diff --git a/grub-core/lib/reed_solomon.c b/grub-core/lib/reed_solomon.c
+index ee9fa7b4feb..19c20085279 100644
+--- a/grub-core/lib/reed_solomon.c
++++ b/grub-core/lib/reed_solomon.c
+@@ -156,7 +156,7 @@ static void
+ rs_encode (gf_single_t *data, grub_size_t s, grub_size_t rs)
+ {
+   gf_single_t *rs_polynomial;
+-  int i, j;
++  unsigned int i, j;
+   gf_single_t *m;
+   m = xmalloc ((s + rs) * sizeof (gf_single_t));
+   grub_memcpy (m, data, s * sizeof (gf_single_t));
+@@ -325,7 +325,7 @@ static void
+ encode_block (gf_single_t *ptr, grub_size_t s,
+ 	      gf_single_t *rptr, grub_size_t rs)
+ {
+-  int i, j;
++  unsigned int i, j;
+   for (i = 0; i < SECTOR_SIZE; i++)
+     {
+       grub_size_t ds = (s + SECTOR_SIZE - 1 - i) / SECTOR_SIZE;
+diff --git a/grub-core/osdep/linux/blocklist.c b/grub-core/osdep/linux/blocklist.c
+index c77d6085ccb..42a315031ff 100644
+--- a/grub-core/osdep/linux/blocklist.c
++++ b/grub-core/osdep/linux/blocklist.c
+@@ -109,7 +109,7 @@ grub_install_get_blocklist (grub_device_t root_dev,
+   else
+     {
+       struct fiemap *fie2;
+-      int i;
++      unsigned int i;
+       fie2 = xmalloc (sizeof (*fie2)
+ 		      + fie1.fm_mapped_extents
+ 		      * sizeof (fie1.fm_extents[1]));
+diff --git a/grub-core/osdep/linux/getroot.c b/grub-core/osdep/linux/getroot.c
+index 4c5a13022dc..2b7a626d5ea 100644
+--- a/grub-core/osdep/linux/getroot.c
++++ b/grub-core/osdep/linux/getroot.c
+@@ -236,7 +236,7 @@ grub_find_root_devices_from_btrfs (const char *dir)
+ {
+   int fd;
+   struct btrfs_ioctl_fs_info_args fsi;
+-  int i, j = 0;
++  unsigned int i, j = 0;
+   char **ret;
+ 
+   fd = open (dir, 0);
+diff --git a/grub-core/osdep/linux/hostdisk.c b/grub-core/osdep/linux/hostdisk.c
+index 06179fca725..bee732c2133 100644
+--- a/grub-core/osdep/linux/hostdisk.c
++++ b/grub-core/osdep/linux/hostdisk.c
+@@ -83,7 +83,7 @@ grub_util_get_fd_size_os (grub_util_fd_t fd, const char *name, unsigned *log_sec
+   if (sector_size & (sector_size - 1) || !sector_size)
+     return -1;
+   for (log_sector_size = 0;
+-       (1 << log_sector_size) < sector_size;
++       (1U << log_sector_size) < sector_size;
+        log_sector_size++);
+ 
+   if (log_secsize)
+diff --git a/util/grub-fstest.c b/util/grub-fstest.c
+index a358ae47152..f82f9504054 100644
+--- a/util/grub-fstest.c
++++ b/util/grub-fstest.c
+@@ -323,7 +323,7 @@ cmd_cmp (char *src, char *dest)
+   read_file (src, cmp_hook, ff);
+ 
+   {
+-    grub_uint64_t pre;
++    long long pre;
+     pre = ftell (ff);
+     fseek (ff, 0, SEEK_END);
+     if (pre != ftell (ff))
+diff --git a/util/grub-menulst2cfg.c b/util/grub-menulst2cfg.c
+index a39f8693947..358d604210b 100644
+--- a/util/grub-menulst2cfg.c
++++ b/util/grub-menulst2cfg.c
+@@ -34,7 +34,7 @@ main (int argc, char **argv)
+   char *buf = NULL;
+   size_t bufsize = 0;
+   char *suffix = xstrdup ("");
+-  int suffixlen = 0;
++  size_t suffixlen = 0;
+   const char *out_fname = 0;
+ 
+   grub_util_host_init (&argc, &argv);
+diff --git a/util/grub-mkfont.c b/util/grub-mkfont.c
+index 0fe45a6103d..3e09240b99f 100644
+--- a/util/grub-mkfont.c
++++ b/util/grub-mkfont.c
+@@ -138,7 +138,8 @@ add_glyph (struct grub_font_info *font_info, FT_UInt glyph_idx, FT_Face face,
+   int width, height;
+   int cuttop, cutbottom, cutleft, cutright;
+   grub_uint8_t *data;
+-  int mask, i, j, bitmap_size;
++  int mask, i, bitmap_size;
++  unsigned int j;
+   FT_GlyphSlot glyph;
+   int flag = FT_LOAD_RENDER | FT_LOAD_MONOCHROME;
+   FT_Error err;
+@@ -183,7 +184,7 @@ add_glyph (struct grub_font_info *font_info, FT_UInt glyph_idx, FT_Face face,
+     cuttop = cutbottom = cutleft = cutright = 0;
+   else
+     {
+-      for (cuttop = 0; cuttop < glyph->bitmap.rows; cuttop++)
++      for (cuttop = 0; cuttop < (long)glyph->bitmap.rows; cuttop++)
+ 	{
+ 	  for (j = 0; j < glyph->bitmap.width; j++)
+ 	    if (glyph->bitmap.buffer[j / 8 + cuttop * glyph->bitmap.pitch]
+@@ -203,10 +204,10 @@ add_glyph (struct grub_font_info *font_info, FT_UInt glyph_idx, FT_Face face,
+ 	    break;
+ 	}
+       cutbottom = glyph->bitmap.rows - 1 - cutbottom;
+-      if (cutbottom + cuttop >= glyph->bitmap.rows)
++      if (cutbottom + cuttop >= (long)glyph->bitmap.rows)
+ 	cutbottom = 0;
+ 
+-      for (cutleft = 0; cutleft < glyph->bitmap.width; cutleft++)
++      for (cutleft = 0; cutleft < (long)glyph->bitmap.width; cutleft++)
+ 	{
+ 	  for (j = 0; j < glyph->bitmap.rows; j++)
+ 	    if (glyph->bitmap.buffer[cutleft / 8 + j * glyph->bitmap.pitch]
+@@ -225,7 +226,7 @@ add_glyph (struct grub_font_info *font_info, FT_UInt glyph_idx, FT_Face face,
+ 	    break;
+ 	}
+       cutright = glyph->bitmap.width - 1 - cutright;
+-      if (cutright + cutleft >= glyph->bitmap.width)
++      if (cutright + cutleft >= (long)glyph->bitmap.width)
+ 	cutright = 0;
+     }
+ 
+@@ -262,7 +263,7 @@ add_glyph (struct grub_font_info *font_info, FT_UInt glyph_idx, FT_Face face,
+ 
+   mask = 0;
+   data = &glyph_info->bitmap[0] - 1;
+-  for (j = cuttop; j < height + cuttop; j++)
++  for (j = cuttop; j < (long)height + cuttop; j++)
+     for (i = cutleft; i < width + cutleft; i++)
+       add_pixel (&data, &mask,
+ 		 glyph->bitmap.buffer[i / 8 + j * glyph->bitmap.pitch] &
+diff --git a/util/grub-probe.c b/util/grub-probe.c
+index e45dbf9e049..e50bd43699d 100644
+--- a/util/grub-probe.c
++++ b/util/grub-probe.c
+@@ -798,7 +798,7 @@ argp_parser (int key, char *arg, struct argp_state *state)
+ 
+     case 't':
+       {
+-	int i;
++	unsigned int i;
+ 
+ 	for (i = PRINT_FS; i < ARRAY_SIZE (targets); i++)
+ 	  if (strcmp (arg, targets[i]) == 0)
+diff --git a/util/grub-rpm-sort.c b/util/grub-rpm-sort.c
+index f33bd1ed568..8345944105f 100644
+--- a/util/grub-rpm-sort.c
++++ b/util/grub-rpm-sort.c
+@@ -232,7 +232,7 @@ main (int argc, char *argv[])
+   struct arguments arguments;
+   char **package_names = NULL;
+   size_t n_package_names = 0;
+-  int i;
++  unsigned int i;
+ 
+   grub_util_host_init (&argc, &argv);
+ 
+diff --git a/util/setup.c b/util/setup.c
+index 9c1e1b7da6a..b0bb71eaaed 100644
+--- a/util/setup.c
++++ b/util/setup.c
+@@ -407,7 +407,7 @@ SETUP (const char *dir,
+     int is_ldm;
+     grub_err_t err;
+     grub_disk_addr_t *sectors;
+-    int i;
++    unsigned int i;
+     grub_fs_t fs;
+     unsigned int nsec, maxsec;
+ 
+diff --git a/grub-core/gnulib/regex.h b/grub-core/gnulib/regex.h
+index 854c6edaf75..9e754c637e6 100644
+--- a/grub-core/gnulib/regex.h
++++ b/grub-core/gnulib/regex.h
+@@ -58,7 +58,7 @@ typedef size_t __re_long_size_t;
+ 
+ /* The traditional GNU regex implementation mishandles strings longer
+    than INT_MAX.  */
+-typedef int __re_idx_t;
++typedef unsigned int __re_idx_t;
+ typedef unsigned int __re_size_t;
+ typedef unsigned long int __re_long_size_t;
+ 
+diff --git a/grub-core/gnulib/regex_internal.h b/grub-core/gnulib/regex_internal.h
+index c467b290708..c3103844eda 100644
+--- a/grub-core/gnulib/regex_internal.h
++++ b/grub-core/gnulib/regex_internal.h
+@@ -399,7 +399,7 @@ struct re_string_t
+   unsigned char offsets_needed;
+   unsigned char newline_anchor;
+   unsigned char word_ops_used;
+-  int mb_cur_max;
++  unsigned int mb_cur_max;
+ };
+ typedef struct re_string_t re_string_t;
+ 
+@@ -691,7 +691,7 @@ struct re_dfa_t
+   unsigned int is_utf8 : 1;
+   unsigned int map_notascii : 1;
+   unsigned int word_ops_used : 1;
+-  int mb_cur_max;
++  unsigned int mb_cur_max;
+   bitset_t word_char;
+   reg_syntax_t syntax;
+   Idx *subexp_map;

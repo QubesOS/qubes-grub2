@@ -1,0 +1,42 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Peter Jones <pjones@redhat.com>
+Date: Tue, 10 Jul 2018 16:54:02 -0400
+Subject: [PATCH] Force everything to use python3
+
+But this still means you need to do PYTHON=python=3 ./autogen.sh if you
+run the world's worst tooling before you patch.
+
+Signed-off-by: Peter Jones <pjones@redhat.com>
+---
+ conf/Makefile.common | 4 ++--
+ gentpl.py            | 2 +-
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/conf/Makefile.common b/conf/Makefile.common
+index c75848f5c06..1ecb921db65 100644
+--- a/conf/Makefile.common
++++ b/conf/Makefile.common
+@@ -128,11 +128,11 @@ BUILT_SOURCES =
+ 
+ .PRECIOUS: $(top_srcdir)/Makefile.util.am
+ $(top_srcdir)/Makefile.util.am: $(top_srcdir)/gentpl.py $(top_srcdir)/Makefile.util.def $(top_srcdir)/Makefile.utilgcry.def
+-	python $^ > $@.new || (rm -f $@.new; exit 1)
++	python3 $^ > $@.new || (rm -f $@.new; exit 1)
+ 	mv $@.new $@
+ 
+ .PRECIOUS: $(top_srcdir)/grub-core/Makefile.core.am
+ $(top_srcdir)/grub-core/Makefile.core.am: $(top_srcdir)/gentpl.py $(top_srcdir)/grub-core/Makefile.core.def $(top_srcdir)/grub-core/Makefile.gcry.def
+ 	if [ "x$$GRUB_CONTRIB" != x ]; then echo "You need to run ./autogen.sh manually." >&2; exit 1; fi
+-	python $^ > $@.new || (rm -f $@.new; exit 1)
++	python3 $^ > $@.new || (rm -f $@.new; exit 1)
+ 	mv $@.new $@
+diff --git a/gentpl.py b/gentpl.py
+index baac6a2af69..6409736e81c 100644
+--- a/gentpl.py
++++ b/gentpl.py
+@@ -1,4 +1,4 @@
+-#! /usr/bin/python
++#! /usr/bin/env python3
+ #  GRUB  --  GRand Unified Bootloader
+ #  Copyright (C) 2010,2011,2012,2013  Free Software Foundation, Inc.
+ #

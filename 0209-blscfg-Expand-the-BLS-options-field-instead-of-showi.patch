@@ -1,0 +1,130 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Javier Martinez Canillas <javierm@redhat.com>
+Date: Wed, 18 Jul 2018 08:08:02 +0200
+Subject: [PATCH] blscfg: Expand the BLS options field instead of showing its
+ variables
+
+The values of the BLS fragment fields can either be string literals or
+grub2 environment variables, the latter will be expanded by grub2 when
+the boot entry is selected.
+
+But from a usability point of view, is much more convenient if the BLS
+parse code expand any variables that are present in the options field.
+
+That will allow users to select an entry in the menu by pressing the e
+key and edit the kernel command line parameters. So for example instead
+of showing the following:
+
+kernel /boot/vmlinuz-4.17.0 $kernelopts
+
+It would show something like the following:
+
+kernel /boot/vmlinuz-4.17.0 root=UUID=cec677c9-c890-4103-b94a-bcc191642935
+
+Suggested-by: Hans de Goede <hdegoede@redhat.com>
+Signed-off-by: Javier Martinez Canillas <javierm@redhat.com>
+---
+ grub-core/commands/blscfg.c | 69 ++++++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 68 insertions(+), 1 deletion(-)
+
+diff --git a/grub-core/commands/blscfg.c b/grub-core/commands/blscfg.c
+index c6addc4dc12..80d8814fc3f 100644
+--- a/grub-core/commands/blscfg.c
++++ b/grub-core/commands/blscfg.c
+@@ -32,6 +32,8 @@
+ #include <grub/normal.h>
+ #include <grub/lib/envblk.h>
+ 
++#include <stdbool.h>
++
+ GRUB_MOD_LICENSE ("GPLv3+");
+ 
+ #include "loadenv.h"
+@@ -506,6 +508,70 @@ static char **bls_make_list (struct bls_entry *entry, const char *key, int *num)
+   return list;
+ }
+ 
++static char *field_append(bool is_var, char *buffer, char *start, char *end)
++{
++  char *temp = grub_strndup(start, end - start + 1);
++  const char *field = temp;
++
++  if (is_var) {
++    field = grub_env_get (temp);
++    if (!field)
++      return buffer;
++  }
++
++  if (!buffer) {
++    buffer = grub_strdup(field);
++    if (!buffer)
++      return NULL;
++  } else {
++    buffer = grub_realloc (buffer, grub_strlen(buffer) + grub_strlen(field));
++    if (!buffer)
++      return NULL;
++
++    grub_stpcpy (buffer + grub_strlen(buffer), field);
++  }
++
++  return buffer;
++}
++
++static char *expand_val(char *value)
++{
++  char *buffer = NULL;
++  char *start = value;
++  char *end = value;
++  bool is_var = false;
++
++  while (*value) {
++    if (*value == '$') {
++      if (start != end) {
++	buffer = field_append(is_var, buffer, start, end);
++	if (!buffer)
++	  return NULL;
++      }
++
++      is_var = true;
++      start = value + 1;
++    } else if (is_var) {
++      if (!grub_isalnum(*value) && *value != '_') {
++	buffer = field_append(is_var, buffer, start, end);
++	is_var = false;
++	start = value;
++      }
++    }
++
++    end = value;
++    value++;
++  }
++
++  if (start != end) {
++    buffer = field_append(is_var, buffer, start, end);
++    if (!buffer)
++      return NULL;
++  }
++
++  return buffer;
++}
++
+ static void create_entry (struct bls_entry *entry)
+ {
+   int argc = 0;
+@@ -536,7 +602,7 @@ static void create_entry (struct bls_entry *entry)
+     }
+ 
+   title = bls_get_val (entry, "title", NULL);
+-  options = bls_get_val (entry, "options", NULL);
++  options = expand_val (bls_get_val (entry, "options", NULL));
+   initrds = bls_make_list (entry, "initrd", NULL);
+ 
+   hotkey = bls_get_val (entry, "grub_hotkey", NULL);
+@@ -594,6 +660,7 @@ static void create_entry (struct bls_entry *entry)
+ finish:
+   grub_free (initrd);
+   grub_free (initrds);
++  grub_free (options);
+   grub_free (classes);
+   grub_free (args);
+   grub_free (argv);

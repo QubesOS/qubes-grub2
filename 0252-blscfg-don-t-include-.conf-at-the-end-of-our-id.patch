@@ -1,0 +1,41 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Peter Jones <pjones@redhat.com>
+Date: Thu, 11 Oct 2018 15:30:13 -0400
+Subject: [PATCH] blscfg: don't include ".conf" at the end of our "id".
+
+Related: rhbz#1638117
+
+Signed-off-by: Peter Jones <pjones@redhat.com>
+---
+ grub-core/commands/blscfg.c | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/grub-core/commands/blscfg.c b/grub-core/commands/blscfg.c
+index bec5a9ffe3e..3847572dabd 100644
+--- a/grub-core/commands/blscfg.c
++++ b/grub-core/commands/blscfg.c
+@@ -575,6 +575,7 @@ static void create_entry (struct bls_entry *entry)
+   char **initrds = NULL;
+   char *initrd = NULL;
+   char *id = entry->filename;
++  char *dotconf = id;
+   char *hotkey = NULL;
+ 
+   char *users = NULL;
+@@ -593,6 +594,16 @@ static void create_entry (struct bls_entry *entry)
+       goto finish;
+     }
+ 
++  /*
++   * strip the ".conf" off the end before we make it our "id" field.
++   */
++  do
++    {
++      dotconf = grub_strstr(dotconf, ".conf");
++    } while (dotconf != NULL && dotconf[5] != '\0');
++  if (dotconf)
++    dotconf[0] = '\0';
++
+   title = bls_get_val (entry, "title", NULL);
+   options = expand_val (bls_get_val (entry, "options", NULL));
+   initrds = bls_make_list (entry, "initrd", NULL);

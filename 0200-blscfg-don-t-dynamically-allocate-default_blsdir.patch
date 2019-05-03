@@ -1,0 +1,45 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Will Thompson <wjt@endlessm.com>
+Date: Wed, 11 Jul 2018 15:01:45 +0100
+Subject: [PATCH] blscfg: don't dynamically allocate default_blsdir
+
+Signed-off-by: Will Thompson <wjt@endlessm.com>
+---
+ grub-core/commands/blscfg.c | 9 +++------
+ 1 file changed, 3 insertions(+), 6 deletions(-)
+
+diff --git a/grub-core/commands/blscfg.c b/grub-core/commands/blscfg.c
+index 82fb6cdd182..b61dddb7f43 100644
+--- a/grub-core/commands/blscfg.c
++++ b/grub-core/commands/blscfg.c
+@@ -623,7 +623,7 @@ static int find_entry (const char *filename,
+   grub_file_t f = NULL;
+   char *grubenv_path = NULL;
+   grub_envblk_t env = NULL;
+-  char *default_blsdir = NULL;
++  const char *default_blsdir = NULL;
+   grub_fs_t blsdir_fs = NULL;
+   grub_device_t blsdir_dev = NULL;
+   const char *blsdir = NULL;
+@@ -643,10 +643,9 @@ static int find_entry (const char *filename,
+ 
+   // set a default blsdir
+   if (info->platform == PLATFORM_EMU)
+-    default_blsdir = grub_xasprintf ("%s%s", GRUB_BOOT_DEVICE,
+-				     GRUB_BLS_CONFIG_PATH);
++    default_blsdir = GRUB_BOOT_DEVICE GRUB_BLS_CONFIG_PATH;
+   else
+-    default_blsdir = grub_xasprintf ("%s", GRUB_BLS_CONFIG_PATH);
++    default_blsdir = GRUB_BLS_CONFIG_PATH;
+ 
+   grub_env_set ("blsdir", default_blsdir);
+   grub_dprintf ("blscfg", "default_blsdir: \"%s\"\n", default_blsdir);
+@@ -788,8 +787,6 @@ finish:
+   if (f)
+     grub_file_close (f);
+ 
+-  grub_free (default_blsdir);
+-
+   return 0;
+ }
+ 

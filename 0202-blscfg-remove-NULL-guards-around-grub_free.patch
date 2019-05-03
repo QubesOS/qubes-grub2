@@ -1,0 +1,48 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Will Thompson <wjt@endlessm.com>
+Date: Thu, 12 Jul 2018 10:14:43 +0100
+Subject: [PATCH] blscfg: remove NULL guards around grub_free()
+
+The internal implementation of grub_free() is NULL-safe. In emu builds,
+it just delegates to the host's free(), which is specified by ANSI C to
+be NULL-safe.
+
+Signed-off-by: Will Thompson <wjt@endlessm.com>
+---
+ grub-core/commands/blscfg.c | 23 ++++++-----------------
+ 1 file changed, 6 insertions(+), 17 deletions(-)
+
+diff --git a/grub-core/commands/blscfg.c b/grub-core/commands/blscfg.c
+index 9c928dda470..bd78559ef68 100644
+--- a/grub-core/commands/blscfg.c
++++ b/grub-core/commands/blscfg.c
+@@ -600,23 +600,12 @@ static void create_entry (struct bls_entry *entry, const char *cfgfile)
+   grub_normal_add_menu_entry (argc, argv, classes, id, users, hotkey, NULL, src, 0);
+ 
+ finish:
+-  if (initrd)
+-    grub_free (initrd);
+-
+-  if (initrds)
+-    grub_free (initrds);
+-
+-  if (classes)
+-    grub_free (classes);
+-
+-  if (args)
+-    grub_free (args);
+-
+-  if (argv)
+-    grub_free (argv);
+-
+-  if (src)
+-    grub_free (src);
++  grub_free (initrd);
++  grub_free (initrds);
++  grub_free (classes);
++  grub_free (args);
++  grub_free (argv);
++  grub_free (src);
+ }
+ 
+ struct find_entry_info {

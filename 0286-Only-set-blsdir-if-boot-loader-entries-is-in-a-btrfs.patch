@@ -1,0 +1,55 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Javier Martinez Canillas <javierm@redhat.com>
+Date: Tue, 19 Mar 2019 01:27:57 +0100
+Subject: [PATCH] Only set blsdir if /boot/loader/entries is in a btrfs or zfs
+ partition
+
+Commit bfc756f8d86 ("Set blsdir if the BLS directory path isn't one of the
+looked up by default") attempted to set blsdir if /boot/loader/entries was
+not the real path of the directory containing the BLS snippets. Which may
+be the case if for example /boot/loader/entries is in a btrfs subvolume.
+
+But in the case of ostree, /boot/loader is a symlink to the directory with
+the entries for the current deployment. So with ostree the blsdir will be
+wrongly set, since GRUB is able to follow the symlinks just fine. In fact,
+it has to follow the symlink since otherwise GRUB will always use the BLS
+files for the deployment that the symlink pointed out when blsdir was set.
+
+So only set blsdir if /boot/loader/entries is in a btrfs or zfs partition.
+
+Related: rhbz#1688453
+
+Signed-off-by: Javier Martinez Canillas <javierm@redhat.com>
+---
+ util/grub.d/10_linux.in     | 3 ++-
+ util/grub.d/10_linux_bls.in | 3 ++-
+ 2 files changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/util/grub.d/10_linux.in b/util/grub.d/10_linux.in
+index 2547dd52115..8f7ecf65df9 100644
+--- a/util/grub.d/10_linux.in
++++ b/util/grub.d/10_linux.in
+@@ -169,7 +169,8 @@ EOF
+ 
+     if [ "x${GRUB_GRUBENV_UPDATE}" = "xyes" ]; then
+         blsdir="/boot/loader/entries"
+-        if [ -d "${blsdir}" ]; then
++        [ -d "${blsdir}" ] && GRUB_BLS_FS="$(${grub_probe} --target=fs ${blsdir})"
++        if [ "x${GRUB_BLS_FS}" = "xbtrfs" ] || [ "x${GRUB_BLS_FS}" = "xzfs" ]; then
+             blsdir=$(make_system_path_relative_to_its_root "${blsdir}")
+             if [ "x${blsdir}" != "x/loader/entries" ] && [ "x${blsdir}" != "x/boot/loader/entries" ]; then
+                 ${grub_editenv} - set blsdir="${blsdir}"
+diff --git a/util/grub.d/10_linux_bls.in b/util/grub.d/10_linux_bls.in
+index 47b87c8a14b..1707e86f2d3 100644
+--- a/util/grub.d/10_linux_bls.in
++++ b/util/grub.d/10_linux_bls.in
+@@ -227,7 +227,8 @@ linux_entry ()
+ 
+     if [ "x${GRUB_GRUBENV_UPDATE}" = "xyes" ]; then
+         blsdir="/boot/loader/entries"
+-        if [ -d "${blsdir}" ]; then
++        [ -d "${blsdir}" ] && GRUB_BLS_FS="$(${grub_probe} --target=fs ${blsdir})"
++        if [ "x${GRUB_BLS_FS}" = "xbtrfs" ] || [ "x${GRUB_BLS_FS}" = "xzfs" ]; then
+             blsdir=$(make_system_path_relative_to_its_root "${blsdir}")
+             if [ "x${blsdir}" != "x/loader/entries" ] && [ "x${blsdir}" != "x/boot/loader/entries" ]; then
+                 ${grub_editenv} - set blsdir="${blsdir}"

@@ -1,0 +1,167 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Peter Jones <pjones@redhat.com>
+Date: Fri, 9 Dec 2016 15:40:29 -0500
+Subject: [PATCH] Add BLS support to grub-mkconfig
+
+GRUB now has BootLoaderSpec support, the user can choose to use this by
+setting GRUB_ENABLE_BLSCFG to true in /etc/default/grub. On this setup,
+the boot menu entries are not added to the grub.cfg, instead BLS config
+files are parsed by blscfg command and the entries created dynamically.
+---
+ util/grub-mkconfig.in     |  3 ++-
+ util/grub-mkconfig_lib.in | 29 +++++++++++++++++++----------
+ util/grub.d/10_linux.in   | 37 +++++++++++++++++++++++++++++++++++--
+ 3 files changed, 56 insertions(+), 13 deletions(-)
+
+diff --git a/util/grub-mkconfig.in b/util/grub-mkconfig.in
+index 4248b9341ab..c20171919d9 100644
+--- a/util/grub-mkconfig.in
++++ b/util/grub-mkconfig.in
+@@ -259,7 +259,8 @@ export GRUB_DEFAULT \
+   GRUB_OS_PROBER_SKIP_LIST \
+   GRUB_DISABLE_SUBMENU \
+   GRUB_DEFAULT_DTB \
+-  SUSE_BTRFS_SNAPSHOT_BOOTING
++  SUSE_BTRFS_SNAPSHOT_BOOTING \
++  GRUB_ENABLE_BLSCFG
+ 
+ if test "x${grub_cfg}" != "x"; then
+   rm -f "${grub_cfg}.new"
+diff --git a/util/grub-mkconfig_lib.in b/util/grub-mkconfig_lib.in
+index b3aae534ddc..1acc1d01c39 100644
+--- a/util/grub-mkconfig_lib.in
++++ b/util/grub-mkconfig_lib.in
+@@ -30,6 +30,9 @@ fi
+ if test "x$grub_file" = x; then
+   grub_file="${bindir}/@grub_file@"
+ fi
++if test "x$grub_editenv" = x; then
++  grub_editenv="${bindir}/@grub_editenv@"
++fi
+ if test "x$grub_mkrelpath" = x; then
+   grub_mkrelpath="${bindir}/@grub_mkrelpath@"
+ fi
+@@ -127,10 +130,16 @@ EOF
+ 
+ prepare_grub_to_access_device ()
+ {
++  local device=$1 && shift
++  if [ "$#" -gt 0 ]; then
++    local variable=$1 && shift
++  else
++    local variable=root
++  fi
+   old_ifs="$IFS"
+   IFS='
+ '
+-  partmap="`"${grub_probe}" --device $@ --target=partmap`"
++  partmap="`"${grub_probe}" --device ${device} --target=partmap`"
+   for module in ${partmap} ; do
+     case "${module}" in
+       netbsd | openbsd)
+@@ -141,34 +150,34 @@ prepare_grub_to_access_device ()
+   done
+ 
+   # Abstraction modules aren't auto-loaded.
+-  abstraction="`"${grub_probe}" --device $@ --target=abstraction`"
++  abstraction="`"${grub_probe}" --device ${device} --target=abstraction`"
+   for module in ${abstraction} ; do
+     echo "insmod ${module}"
+   done
+ 
+-  fs="`"${grub_probe}" --device $@ --target=fs`"
++  fs="`"${grub_probe}" --device ${device} --target=fs`"
+   for module in ${fs} ; do
+     echo "insmod ${module}"
+   done
+ 
+   if [ x$GRUB_ENABLE_CRYPTODISK = xy ]; then
+-      for uuid in `"${grub_probe}" --device $@ --target=cryptodisk_uuid`; do
++      for uuid in `"${grub_probe}" --device ${device} --target=cryptodisk_uuid`; do
+ 	  echo "cryptomount -u $uuid"
+       done
+   fi
+ 
+   # If there's a filesystem UUID that GRUB is capable of identifying, use it;
+   # otherwise set root as per value in device.map.
+-  fs_hint="`"${grub_probe}" --device $@ --target=compatibility_hint`"
++  fs_hint="`"${grub_probe}" --device ${device} --target=compatibility_hint`"
+   if [ "x$fs_hint" != x ]; then
+-    echo "set root='$fs_hint'"
++    echo "set ${variable}='$fs_hint'"
+   fi
+-  if [ "x$GRUB_DISABLE_UUID" != "xtrue" ] && fs_uuid="`"${grub_probe}" --device $@ --target=fs_uuid 2> /dev/null`" ; then
+-    hints="`"${grub_probe}" --device $@ --target=hints_string 2> /dev/null`" || hints=
++  if [ "x$GRUB_DISABLE_UUID" != "xtrue" ] && fs_uuid="`"${grub_probe}" --device ${device} --target=fs_uuid 2> /dev/null`" ; then
++    hints="`"${grub_probe}" --device ${device} --target=hints_string 2> /dev/null`" || hints=
+     echo "if [ x\$feature_platform_search_hint = xy ]; then"
+-    echo "  search --no-floppy --fs-uuid --set=root ${hints} ${fs_uuid}"
++    echo "  search --no-floppy --fs-uuid --set=${variable} ${hints} ${fs_uuid}"
+     echo "else"
+-    echo "  search --no-floppy --fs-uuid --set=root ${fs_uuid}"
++    echo "  search --no-floppy --fs-uuid --set=${variable} ${fs_uuid}"
+     echo "fi"
+   fi
+   IFS="$old_ifs"
+diff --git a/util/grub.d/10_linux.in b/util/grub.d/10_linux.in
+index d9a05937e46..839f1fdb655 100644
+--- a/util/grub.d/10_linux.in
++++ b/util/grub.d/10_linux.in
+@@ -121,6 +121,34 @@ linux_entry ()
+   if [ -z "$boot_device_id" ]; then
+       boot_device_id="$(grub_get_device_id "${GRUB_DEVICE}")"
+   fi
++
++  if [ "x${GRUB_ENABLE_BLSCFG}" = "xtrue" ]; then
++    if [ x$dirname = x/ ]; then
++      if [ -z "${prepare_root_cache}" ]; then
++        prepare_grub_to_access_device ${GRUB_DEVICE}
++      fi
++    else
++      if [ -z "${prepare_boot_cache}" ]; then
++        prepare_grub_to_access_device ${GRUB_DEVICE_BOOT}
++      fi
++    fi
++
++    bootefi_device="`${grub_probe} --target=device /boot/efi/`"
++    prepare_grub_to_access_device ${bootefi_device} boot
++
++    cat << EOF
++insmod blscfg
++blscfg
++if [ -s \$prefix/grubenv ]; then
++  load_env
++fi
++EOF
++
++    ${grub_editenv} - set kernelopts="root=${linux_root_device_thisversion} ro ${args}"
++
++    exit 0
++  fi
++
+   if [ x$type != xsimple ] ; then
+       title=$(mktitle "$type" "$version")
+       if [ x"$title" = x"$GRUB_ACTUAL_DEFAULT" ] || [ x"Previous Linux versions>$title" = x"$GRUB_ACTUAL_DEFAULT" ]; then
+@@ -223,7 +251,10 @@ submenu_indentation=""
+ is_top_level=true
+ while [ "x$list" != "x" ] ; do
+   linux=`version_find_latest $list`
+-  gettext_printf "Found linux image: %s\n" "$linux" >&2
++  if [ "x${GRUB_ENABLE_BLSCFG}" != "xtrue" ]; then
++    gettext_printf "Found linux image: %s\n" "$linux" >&2
++  fi
++
+   basename=`basename $linux`
+   dirname=`dirname $linux`
+   rel_dirname=`make_system_path_relative_to_its_root $dirname`
+@@ -262,7 +293,9 @@ while [ "x$list" != "x" ] ; do
+     for i in ${initrd}; do
+       initrd_display="${initrd_display} ${dirname}/${i}"
+     done
+-    gettext_printf "Found initrd image: %s\n" "$(echo $initrd_display)" >&2
++    if [ "x${GRUB_ENABLE_BLSCFG}" != "xtrue" ]; then
++      gettext_printf "Found initrd image: %s\n" "$(echo $initrd_display)" >&2
++    fi
+   fi
+ 
+   fdt=

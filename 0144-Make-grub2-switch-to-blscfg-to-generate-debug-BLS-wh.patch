@@ -1,0 +1,58 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Javier Martinez Canillas <javierm@redhat.com>
+Date: Wed, 11 Apr 2018 11:49:24 +0200
+Subject: [PATCH] Make grub2-switch-to-blscfg to generate debug BLS when
+ MAKEDEBUG is set
+
+If MAKEDEBUG=yes in /etc/sysconfig/kernel, then a debug menu entry should
+be created. So for BLS, a debug configuration file has to be created that
+contains additional debug kernel command line parameters.
+
+Signed-off-by: Javier Martinez Canillas <javierm@redhat.com>
+---
+ util/grub-switch-to-blscfg.in | 15 +++++++++++++++
+ 1 file changed, 15 insertions(+)
+
+diff --git a/util/grub-switch-to-blscfg.in b/util/grub-switch-to-blscfg.in
+index eae3c379e4a..c59299ffa6a 100644
+--- a/util/grub-switch-to-blscfg.in
++++ b/util/grub-switch-to-blscfg.in
+@@ -21,6 +21,7 @@
+ # Initialize some variables.
+ prefix=@prefix@
+ exec_prefix=@exec_prefix@
++sbindir=@sbindir@
+ bindir=@bindir@
+ sysconfdir="@sysconfdir@"
+ PACKAGE_NAME=@PACKAGE_NAME@
+@@ -33,9 +34,12 @@ fi
+ 
+ self=`basename $0`
+ 
++grub_get_kernel_settings="${sbindir}/@grub_get_kernel_settings@"
+ grub_editenv=${bindir}/@grub_editenv@
+ etcdefaultgrub=/etc/default/grub
+ 
++eval "$("${grub_get_kernel_settings}")" || true
++
+ EFIDIR=$(grep ^ID= /etc/os-release | sed -e 's/^ID=//' -e 's/rhel/redhat/')
+ if [ -d /sys/firmware/efi/efivars/ ]; then
+     startlink=/etc/grub2-efi.cfg
+@@ -226,6 +230,17 @@ for kernelver in $(cd /lib/modules/ ; ls -1) "" ; do
+             "$(date -u +%Y%m%d%H%M%S -d "$(stat -c '%y' "${kernel_dir}")")" \
+             >"${bls_target}"
+     fi
++
++    if [ "x$GRUB_LINUX_MAKE_DEBUG" = "xtrue" ]; then
++        arch="$(uname -m)"
++        bls_debug="$(echo ${bls_target} | sed -e "s/\.${arch}/-debug.${arch}/")"
++        cp -aT  "${bls_target}" "${bls_debug}"
++        title="$(grep '^title[ \t]' "${bls_debug}" | sed -e 's/^title[ \t]*//')"
++        blsid="$(grep '^id[ \t]' "${bls_debug}" | sed -e "s/\.${ARCH}/-debug.${arch}/")"
++        sed -i -e "s/^title.*/title ${title}${GRUB_LINUX_DEBUG_TITLE_POSTFIX}/" "${bls_debug}"
++        sed -i -e "s/^id.*/${blsid}/" "${bls_debug}"
++        sed -i -e "s/^options.*/options \$kernelopts ${GRUB_CMDLINE_LINUX_DEBUG}/" "${bls_debug}"
++    fi
+ done
+ 
+ GENERATE=0

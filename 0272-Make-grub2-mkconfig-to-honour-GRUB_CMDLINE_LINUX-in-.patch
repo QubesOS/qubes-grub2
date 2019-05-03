@@ -1,0 +1,99 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Javier Martinez Canillas <javierm@redhat.com>
+Date: Mon, 10 Dec 2018 13:11:58 +0100
+Subject: [PATCH] Make grub2-mkconfig to honour GRUB_CMDLINE_LINUX in
+ /etc/default/grub
+
+The kernelopts grub environment variable is set with the GRUB_CMDLINE_LINUX
+value only if wasn't set before. This is because the kernel cmdline params
+of the entries are not in the grub.cfg anymore so grub2-mkconfig shouldn't
+have side effects on neither the entries nor their kernel cmdline params.
+
+But there's a lot of documentation pointing at modifying GRUB_CMDLINE_LINUX
+to change the kernel cmdline params and users have built a muscle memory on
+it, so the BLS support should be compatible.
+
+Make the grub2-mkconfig script update the $kernelopts environment variable
+unless the --no-grubenv-update option is used.
+
+Resolves: rhbz#1637875
+
+Signed-off-by: Javier Martinez Canillas <javierm@redhat.com>
+---
+ util/grub-mkconfig.8        | 4 ++++
+ util/grub-mkconfig.in       | 6 ++++++
+ util/grub.d/10_linux.in     | 2 +-
+ util/grub.d/10_linux_bls.in | 2 +-
+ 4 files changed, 12 insertions(+), 2 deletions(-)
+
+diff --git a/util/grub-mkconfig.8 b/util/grub-mkconfig.8
+index a2d1f577b9b..434fa4deda4 100644
+--- a/util/grub-mkconfig.8
++++ b/util/grub-mkconfig.8
+@@ -13,5 +13,9 @@
+ \fB--output\fR=\fIFILE\fR
+ Write generated output to \fIFILE\fR.
+ 
++.TP
++\fB--no-grubenv-update\fR
++Do not update variables in the grubenv file.
++
+ .SH SEE ALSO
+ .BR "info grub"
+diff --git a/util/grub-mkconfig.in b/util/grub-mkconfig.in
+index c20171919d9..5e643e16973 100644
+--- a/util/grub-mkconfig.in
++++ b/util/grub-mkconfig.in
+@@ -50,6 +50,8 @@ grub_get_kernel_settings="${sbindir}/@grub_get_kernel_settings@"
+ export TEXTDOMAIN=@PACKAGE@
+ export TEXTDOMAINDIR="@localedir@"
+ 
++export GRUB_GRUBENV_UPDATE="yes"
++
+ . "${pkgdatadir}/grub-mkconfig_lib"
+ 
+ # Usage: usage
+@@ -59,6 +61,7 @@ usage () {
+     gettext "Generate a grub config file"; echo
+     echo
+     print_option_help "-o, --output=$(gettext FILE)" "$(gettext "output generated config to FILE [default=stdout]")"
++    print_option_help "--no-grubenv-update" "$(gettext "do not update variables in the grubenv file")"
+     print_option_help "-h, --help" "$(gettext "print this message and exit")"
+     print_option_help "-v, --version" "$(gettext "print the version information and exit")"
+     echo
+@@ -94,6 +97,9 @@ do
+     --output=*)
+ 	grub_cfg=`echo "$option" | sed 's/--output=//'`
+ 	;;
++    --no-grubenv-update)
++	GRUB_GRUBENV_UPDATE="no"
++	;;
+     -*)
+ 	gettext_printf "Unrecognized option \`%s'\n" "$option" 1>&2
+ 	usage
+diff --git a/util/grub.d/10_linux.in b/util/grub.d/10_linux.in
+index b54d2774a7d..da2992ac9f1 100644
+--- a/util/grub.d/10_linux.in
++++ b/util/grub.d/10_linux.in
+@@ -165,7 +165,7 @@ if [ -s \$prefix/grubenv ]; then
+ fi
+ EOF
+ 
+-    if ! grub2-editenv - list | grep -q kernelopts; then
++    if [ "x${GRUB_GRUBENV_UPDATE}" = "xyes" ]; then
+ 	${grub_editenv} - set kernelopts="root=${linux_root_device_thisversion} ro ${args}"
+     fi
+ 
+diff --git a/util/grub.d/10_linux_bls.in b/util/grub.d/10_linux_bls.in
+index 8cff4c58ab5..175bedd0763 100644
+--- a/util/grub.d/10_linux_bls.in
++++ b/util/grub.d/10_linux_bls.in
+@@ -225,7 +225,7 @@ linux_entry ()
+     populate_header_warn
+     populate_menu
+ 
+-    if ! grub2-editenv - list | grep -q kernelopts; then
++    if [ "x${GRUB_GRUBENV_UPDATE}" = "xyes" ]; then
+ 	${grub_editenv} - set kernelopts="root=${linux_root_device_thisversion} ro ${args}"
+     fi
+ 

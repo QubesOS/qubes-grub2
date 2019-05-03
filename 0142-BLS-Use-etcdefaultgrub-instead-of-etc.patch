@@ -1,0 +1,24 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Jan Hlavac <jhlavac@redhat.com>
+Date: Tue, 10 Apr 2018 16:56:28 +0200
+Subject: [PATCH] BLS: Use ${etcdefaultgrub} instead of /etc/...
+
+Inside the grub-switch-to-blscfg script the ${etcdefaultgrub} variable
+is used. So replace the hardcoded /etc/default/grub with it.
+---
+ util/grub-switch-to-blscfg.in | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/util/grub-switch-to-blscfg.in b/util/grub-switch-to-blscfg.in
+index f740b8f4d03..eae3c379e4a 100644
+--- a/util/grub-switch-to-blscfg.in
++++ b/util/grub-switch-to-blscfg.in
+@@ -252,7 +252,7 @@ if [[ "${GENERATE}" -eq 1 ]] ; then
+         cp -af "${GRUB_CONFIG_FILE}${backupsuffix}" "${GRUB_CONFIG_FILE}"
+         sed -i"${backupsuffix}" \
+             -e 's,^GRUB_ENABLE_BLSCFG=.*,GRUB_ENABLE_BLSCFG=false,' \
+-            /etc/default/grub
++            "${etcdefaultgrub}"
+         gettext_printf "Updating %s failed\n" "${GRUB_CONFIG_FILE}"
+         exit 1
+     fi

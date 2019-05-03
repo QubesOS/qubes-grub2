@@ -1,0 +1,46 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Javier Martinez Canillas <javierm@redhat.com>
+Date: Tue, 3 Apr 2018 15:42:47 +0200
+Subject: [PATCH] Only attempt to scan different BLS directories on EFI
+ machines
+
+Current BLS support attempted to scan for BLS directories, but this only
+makes sense on EFI, where BLS fragments are in /loader/$vendor/entries.
+
+For BIOS, only either the default /loader/entries path should be scanned
+or the BLS directory defined in the blsdir GRUB 2 environment variable.
+
+Signed-off-by: Javier Martinez Canillas <javierm@redhat.com>
+---
+ grub-core/commands/blscfg.c | 9 ++++-----
+ 1 file changed, 4 insertions(+), 5 deletions(-)
+
+diff --git a/grub-core/commands/blscfg.c b/grub-core/commands/blscfg.c
+index e0b65534af4..e775c6b8794 100644
+--- a/grub-core/commands/blscfg.c
++++ b/grub-core/commands/blscfg.c
+@@ -676,8 +676,8 @@ static int find_entry (const char *filename,
+   const char *devid = grub_env_get ("boot");
+ 
+   grub_dprintf("blscfg", "%s got here\n", __func__);
+-  if (!grub_strcmp (filename, ".") ||
+-      !grub_strcmp (filename, ".."))
++  if (filename && (!grub_strcmp (filename, ".") ||
++		   !grub_strcmp (filename, "..")))
+     return 0;
+ 
+   if (info->platform == PLATFORM_EFI && !grub_strcasecmp (filename, "boot"))
+@@ -872,11 +872,10 @@ grub_cmd_blscfg (grub_extcmd_context_t ctxt UNUSED,
+   info.platform = PLATFORM_EMU;
+   grub_dprintf ("blscfg", "scanning %s%s\n", GRUB_BOOT_DEVICE,
+ 		GRUB_BLS_CONFIG_PATH);
+-  r = fs->dir (dev, "/boot/loader/",
+-	       find_entry, &info);
++  find_entry(NULL, NULL, &info);
+ #else
+   grub_dprintf ("blscfg", "scanning %s\n", GRUB_BLS_CONFIG_PATH);
+-  r = fs->dir (dev, "/", find_entry, &info);
++  find_entry(NULL, NULL, &info);
+ #endif
+ 
+ finish:

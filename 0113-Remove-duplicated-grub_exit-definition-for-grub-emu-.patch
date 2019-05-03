@@ -1,0 +1,33 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Javier Martinez Canillas <javierm@redhat.com>
+Date: Tue, 6 Feb 2018 11:02:09 +0100
+Subject: [PATCH] Remove duplicated grub_exit() definition for grub-emu
+ platform
+
+The grub_exit() function signature was changed on all platforms to take a
+return code, but latter on a following commit the grub_exit() for the emu
+platform was duplicated. It causes a build error so remove the duplicated
+function definition.
+
+Signed-off-by: Javier Martinez Canillas <javierm@redhat.com>
+---
+ grub-core/kern/emu/main.c | 6 ------
+ 1 file changed, 6 deletions(-)
+
+diff --git a/grub-core/kern/emu/main.c b/grub-core/kern/emu/main.c
+index 7e47ec81263..55ea5a11ccd 100644
+--- a/grub-core/kern/emu/main.c
++++ b/grub-core/kern/emu/main.c
+@@ -72,12 +72,6 @@ grub_exit (int retval __attribute__((unused)))
+   grub_reboot ();
+ }
+ 
+-void
+-grub_exit (int retval __attribute__((unused)))
+-{
+-  grub_reboot ();
+-}
+-
+ void
+ grub_machine_init (void)
+ {

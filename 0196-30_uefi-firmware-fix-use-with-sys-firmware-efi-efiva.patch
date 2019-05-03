@@ -1,0 +1,36 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Hans de Goede <hdegoede@redhat.com>
+Date: Fri, 29 Jun 2018 10:08:22 +0200
+Subject: [PATCH] 30_uefi-firmware: fix use with /sys/firmware/efi/efivars
+
+Fix 30_uefi-firmware checking for the obsolete /sys/firmware/efi/vars
+instead of for the new efivarfs mounted at /sys/firmware/efi/efivars.
+
+Which goes to show that I really should have tested this before blindly
+importing it from Ubuntu.
+
+Signed-off-by: Hans de Goede <hdegoede@redhat.com>
+---
+ util/grub.d/30_uefi-firmware.in | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/util/grub.d/30_uefi-firmware.in b/util/grub.d/30_uefi-firmware.in
+index 3c9f533d8c6..93ececffea7 100644
+--- a/util/grub.d/30_uefi-firmware.in
++++ b/util/grub.d/30_uefi-firmware.in
+@@ -26,12 +26,12 @@ export TEXTDOMAINDIR="@localedir@"
+ 
+ . "@datadir@/@PACKAGE@/grub-mkconfig_lib"
+ 
+-efi_vars_dir=/sys/firmware/efi/vars
++efi_vars_dir=/sys/firmware/efi/efivars
+ EFI_GLOBAL_VARIABLE=8be4df61-93ca-11d2-aa0d-00e098032b8c
+-OsIndications="$efi_vars_dir/OsIndicationsSupported-$EFI_GLOBAL_VARIABLE/data"
++OsIndications="$efi_vars_dir/OsIndicationsSupported-$EFI_GLOBAL_VARIABLE"
+ 
+ if [ -e "$OsIndications" ] && \
+-   [ "$(( $(printf 0x%x \'"$(cat $OsIndications | cut -b1)") & 1 ))" = 1 ]; then
++   [ "$(( $(printf 0x%x \'"$(cat $OsIndications | cut -b5)") & 1 ))" = 1 ]; then
+   LABEL="System setup"
+ 
+   gettext_printf "Adding boot menu entry for EFI firmware configuration\n" >&2

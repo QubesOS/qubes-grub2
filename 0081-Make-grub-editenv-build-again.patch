@@ -1,0 +1,27 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Peter Jones <pjones@redhat.com>
+Date: Fri, 4 Mar 2016 16:29:13 -0500
+Subject: [PATCH] Make grub-editenv build again.
+
+36212460d3565b18439a3a8130b28e6c97702c6a split how some of the mkimage
+utility functions are defined, and they wind up being linked into
+grub-editenv.  Most utilities got fixed, but this one was missed.
+
+Signed-off-by: Peter Jones <pjones@redhat.com>
+---
+ Makefile.util.def | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/Makefile.util.def b/Makefile.util.def
+index 2d032643de7..879e8eb98a4 100644
+--- a/Makefile.util.def
++++ b/Makefile.util.def
+@@ -237,6 +237,8 @@ program = {
+   extra_dist = grub-core/osdep/unix/compress.c;
+   extra_dist = grub-core/osdep/basic/compress.c;
+   common = util/mkimage.c;
++  common = util/grub-mkimage32.c;
++  common = util/grub-mkimage64.c;
+   common = grub-core/osdep/config.c;
+   common = util/config.c;
+   common = util/resolve.c;

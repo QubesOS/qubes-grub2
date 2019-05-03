@@ -1,0 +1,170 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Javier Martinez Canillas <javierm@redhat.com>
+Date: Fri, 11 May 2018 23:47:31 +0200
+Subject: [PATCH] Simplify BLS entry key val pairs lookup
+
+The <key,value> pairs found in the BLS are being sorted but this isn't
+really needed and it makes the implementation complex and error prone.
+
+For example, the current implementation has the following issues:
+
+1) Fields not present in the grub2 menu entry
+
+  linux /linuz
+  initrd /foo
+  initrd /bar
+
+  load_video
+  set gfx_payload=keep
+  insmod gzio
+  linux /boot/linuz
+  initrd /boot/bar
+
+2) Fields present but in the wrong order
+
+  title Fedora (4.16.6-300.fc28.x86_64-tuned) 28 (Twenty Eight)
+  version 4.16.6-300.fc28.x86_64
+  linux /vmlinuz-4.16.6-300.fc28.x86_64
+  initrd /foo.img
+  initrd /bar.img
+  options $kernelopts
+  id fedora-20180430150025-4.16.6-300.fc28.x86_64
+
+  load_video
+  set gfx_payload=keep
+  insmod gzio
+  linux /boot/vmlinuz-4.16.6-300.fc28.x86_64 $kernelopts
+  initrd /boot/bar.img /boot/foo.img
+
+It's important to preserve the order in which fields have been defined
+in the BLS fragment since for some of the fields the order has meaning.
+For example, initramfs images have to be passed to the kernel in order
+that were defined in the BLS fragment.
+
+This patch simplifies the <key,value> pairs storage and lookup. Rather
+than sorting and attempt to later figure out what's the expected order,
+just store it in the same order as they were defined in the BLS config
+file and return in that same order to callers when these look them up.
+
+Signed-off-by: Javier Martinez Canillas <javierm@redhat.com>
+---
+ grub-core/commands/blscfg.c | 88 ++++++++++-----------------------------------
+ 1 file changed, 18 insertions(+), 70 deletions(-)
+
+diff --git a/grub-core/commands/blscfg.c b/grub-core/commands/blscfg.c
+index c52d2b2e05a..fb08d8e4c12 100644
+--- a/grub-core/commands/blscfg.c
++++ b/grub-core/commands/blscfg.c
+@@ -169,84 +169,35 @@ static void bls_free_entry(struct bls_entry *entry)
+   grub_free (entry);
+ }
+ 
+-static int keyval_cmp (const void *p0, const void *p1,
+-		       void *state UNUSED)
+-{
+-  const struct keyval *kv0 = *(struct keyval * const *)p0;
+-  const struct keyval *kv1 = *(struct keyval * const *)p1;
+-  int rc;
+-
+-  rc = grub_strcmp(kv0->key, kv1->key);
+-
+-  return rc;
+-}
+-
+ /* Find they value of the key named by keyname.  If there are allowed to be
+  * more than one, pass a pointer to an int set to -1 the first time, and pass
+  * the same pointer through each time after, and it'll return them in sorted
+- * order. */
++ * order as defined in the BLS fragment file */
+ static char *bls_get_val(struct bls_entry *entry, const char *keyname, int *last)
+ {
+-  char *foo = (char *)"";
+-  struct keyval *kv = NULL, **kvp, key = {keyname, foo}, *keyp = &key;
++  int idx, start = 0;
++  struct keyval *kv = NULL;
+ 
+-  /* if we've already found an entry that matches, just iterate */
+-  if (last && *last >= 0)
+-    {
+-      int next = ++last[0];
++  if (last)
++    start = *last + 1;
+ 
+-      if (next == entry->nkeyvals)
+-	{
+-done:
+-	  *last = -1;
+-	  return NULL;
+-	}
++  for (idx = start; idx < entry->nkeyvals; idx++) {
++    kv = entry->keyvals[idx];
+ 
+-      kv = entry->keyvals[next];
+-      if (grub_strcmp (keyname, kv->key))
+-	goto done;
++    if (!grub_strcmp (keyname, kv->key))
++      break;
++  }
+ 
+-      return kv->val;
+-    }
++  if (idx == entry->nkeyvals) {
++    if (last)
++      *last = -1;
++    return NULL;
++  }
+ 
+-  kvp = grub_bsearch(&keyp, &entry->keyvals[0], entry->nkeyvals,
+-		    sizeof (struct keyval *), keyval_cmp, NULL);
+-  if (kvp)
+-    kv = *kvp;
++  if (last)
++    *last = idx;
+ 
+-  if (kv)
+-    {
+-      /* if we've got uninitialized but present state, track back until we find
+-       * the first match */
+-      if (last)
+-	{
+-	  grub_dprintf("blscfg", "%s trying to find another entry because last was set\n", __func__);
+-	  /* figure out the position of this entry in the array */
+-	  int idx;
+-	  for (idx = 0 ; idx < entry->nkeyvals; idx++)
+-	    if (entry->keyvals[idx] == kv)
+-	      break;
+-	  *last = idx;
+-
+-	  while (idx > 0)
+-	    {
+-	      struct keyval *kvtmp = entry->keyvals[idx-1];
+-	      if (idx == 0 || grub_strcmp (keyname, kvtmp->key))
+-		{
+-		  /* if we're at the start, or if the previous entry doesn't
+-		   * match, then we're done */
+-		  *last = idx;
+-		  break;
+-		}
+-	      else
+-		/* but if it does match, keep going backwards */
+-		idx--;
+-	    }
+-	}
+-
+-      return kv->val;
+-    }
+-  return NULL;
++  return kv->val;
+ }
+ 
+ #define goto_return(x) ({ ret = (x); goto finish; })
+@@ -503,9 +454,6 @@ static int read_entry (
+ 	break;
+     }
+ 
+-  grub_qsort(&entry->keyvals[0], entry->nkeyvals, sizeof (struct keyval *),
+-	     keyval_cmp, NULL);
+-
+ finish:
+   grub_free (p);
+ 

@@ -1,0 +1,73 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Peter Jones <pjones@redhat.com>
+Date: Fri, 22 Jun 2018 14:04:28 -0400
+Subject: [PATCH] grub-switch-to-blscfg.in: Better boot prefix checking
+
+Signed-off-by: Peter Jones <pjones@redhat.com>
+---
+ util/grub-switch-to-blscfg.in | 36 +++++++++++++++++-------------------
+ 1 file changed, 17 insertions(+), 19 deletions(-)
+
+diff --git a/util/grub-switch-to-blscfg.in b/util/grub-switch-to-blscfg.in
+index dac41e73836..884cf45b1e1 100644
+--- a/util/grub-switch-to-blscfg.in
++++ b/util/grub-switch-to-blscfg.in
+@@ -219,30 +219,31 @@ EOF
+ }
+ 
+ for kernelver in $(cd /lib/modules/ ; ls -1) "" ; do
+-    if [ ! -d "/lib/modules/${kernelver}" ] ; then
+-        continue
+-    fi
+-    if [ ! -f "/boot/vmlinuz-${kernelver}" ]; then
+-        continue
+-    fi
+     bls_target="${blsdir}/${MACHINE_ID}-${kernelver}.conf"
++    linux="$(grep '^linux[ \t]' "${bls_target}" | sed -e 's,^linux[ \t]+,,')"
+     kernel_dir="/lib/modules/${kernelver}"
+-    if [ -f "${kernel_dir}/bls.conf" ]; then
++
++    if [ ! -d "${kernel_dir}" ] ; then
++        continue
++    fi
++    if [ ! -f "${linux_path}" ]; then
++        continue
++    fi
++
++    linux_relpath="$("${grub_mkrelpath}" "${linux}")"
++    bootprefix="${linux%%"${linux_relpath}"}"
++
++    if [ -f "${kernel_dir}/bls.conf" ] ; then
+         cp -af "${kernel_dir}/bls.conf" "${bls_target}"
+     else
+         mkbls "${kernelver}" \
+             "$(date -u +%Y%m%d%H%M%S -d "$(stat -c '%y' "${kernel_dir}")")" \
++            "${bootprefix}" \
+             >"${bls_target}"
+     fi
+ 
+-    linux="$(grep '^linux[ \t]' "${bls_target}" | sed -e 's,^linux[ \t]*,,')"
+-    initrd="$(grep '^initrd[ \t]' "${bls_target}" | sed -e 's,^initrd[ \t]*,,')"
+-    linux_relpath="$("${grub_mkrelpath}" /boot/$linux)"
+-    initrd_relpath="$("${grub_mkrelpath}" /boot/$initrd)"
+-
+-    if [ $linux != $linux_relpath ] ; then
+-        sed -i -e "s,^linux.*,linux ${linux_relpath},g" "${bls_target}"
+-        sed -i -e "s,^initrd.*,initrd ${initrd_relpath},g" "${bls_target}"
++    if [ -n "${bootprefix}" ]; then
++        sed -i -e "s,\([ \t]\)${bootprefix},\1,g" "${bls_target}"
+     fi
+ 
+     if [ "x$GRUB_LINUX_MAKE_DEBUG" = "xtrue" ]; then
+@@ -257,10 +258,7 @@ for kernelver in $(cd /lib/modules/ ; ls -1) "" ; do
+     fi
+ done
+ 
+-if [ -f "/boot/vmlinuz-0-rescue-${MACHINE_ID}" ]; then
+-    if [ $linux != $linux_relpath ]; then
+-        bootprefix="$(dirname ${linux_relpath})"
+-    fi
++if [ -n "${bootprefix}" -a -f "/boot/vmlinuz-0-rescue-${MACHINE_ID}" ]; then
+     mkbls "0-rescue-${MACHINE_ID}" "0" "${bootprefix}" >"${blsdir}/${MACHINE_ID}-0-rescue.conf"
+ fi
+ 

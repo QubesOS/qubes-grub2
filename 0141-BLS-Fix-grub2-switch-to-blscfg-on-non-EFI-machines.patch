@@ -1,0 +1,25 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Jan Hlavac <jhlavac@redhat.com>
+Date: Tue, 10 Apr 2018 16:07:36 +0200
+Subject: [PATCH] BLS: Fix grub2-switch-to-blscfg on non-EFI machines
+
+On the non-EFI machines the grub2-switch-to-blscfg script places the BLS
+snippets into the /boot directory. But the right location is
+/boot/loader/entries.
+---
+ util/grub-switch-to-blscfg.in | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/util/grub-switch-to-blscfg.in b/util/grub-switch-to-blscfg.in
+index 3ae5e4ea8d0..f740b8f4d03 100644
+--- a/util/grub-switch-to-blscfg.in
++++ b/util/grub-switch-to-blscfg.in
+@@ -44,7 +44,7 @@ if [ -d /sys/firmware/efi/efivars/ ]; then
+ else
+     startlink=/etc/grub2.cfg
+     grubdir=`echo "/@bootdirname@/@grubdirname@" | sed 's,//*,/,g'`
+-    blsdir=`echo "/@bootdirname@" | sed 's,//*,/,g'`
++    blsdir=`echo "/@bootdirname@/loader/entries" | sed 's,//*,/,g'`
+ fi
+ 
+ backupsuffix=.bak

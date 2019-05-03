@@ -1,0 +1,38 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Javier Martinez Canillas <javierm@redhat.com>
+Date: Tue, 24 Apr 2018 02:28:04 +0200
+Subject: [PATCH] Include OSTree path when searching kernels images if BLS
+ config is enabled
+
+The OSTree based distros (i.e: Fedora Atomic) don't install kernel images
+in the /boot directory, but in /boot/ostree. So the 10_linux script isn't
+able to include these kernels in its list, so the linux_entry() function
+is never called.
+
+This isn't a problem since the 10_linux script isn't used to populate the
+menu entries anyways, but instead a custom 15_ostree script is used. But
+for BLS we want the 10_linux script to generate the minimal grub.cfg that
+calls the blscfg command, so add the OSTree kernel images to the list.
+
+Signed-off-by: Javier Martinez Canillas <javierm@redhat.com>
+---
+ util/grub.d/10_linux.in | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/util/grub.d/10_linux.in b/util/grub.d/10_linux.in
+index 61d0664fb5c..9682e97b7f5 100644
+--- a/util/grub.d/10_linux.in
++++ b/util/grub.d/10_linux.in
+@@ -237,6 +237,12 @@ case "x$machine" in
+ 	done ;;
+ esac
+ 
++if [ "x${GRUB_ENABLE_BLSCFG}" = "xtrue" ]; then
++    for i in /boot/ostree/*/vmlinuz-* ; do
++        if grub_file_is_not_garbage "$i" ; then list="$list $i" ; fi
++    done
++fi
++
+ case "$machine" in
+     i?86) GENKERNEL_ARCH="x86" ;;
+     mips|mips64) GENKERNEL_ARCH="mips" ;;

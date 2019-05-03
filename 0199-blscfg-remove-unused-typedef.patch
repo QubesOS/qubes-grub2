@@ -1,0 +1,29 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Will Thompson <wjt@endlessm.com>
+Date: Wed, 11 Jul 2018 14:59:52 +0100
+Subject: [PATCH] blscfg: remove unused typedef
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+This is unused since ‘Use BLS fragment filename as menu entry id and for
+criteria to sort’.
+
+Signed-off-by: Will Thompson <wjt@endlessm.com>
+---
+ grub-core/commands/blscfg.c | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/grub-core/commands/blscfg.c b/grub-core/commands/blscfg.c
+index cd8659384e4..82fb6cdd182 100644
+--- a/grub-core/commands/blscfg.c
++++ b/grub-core/commands/blscfg.c
+@@ -327,8 +327,6 @@ finish:
+     return ret;
+ }
+ 
+-typedef int (*void_cmp_t)(void *, void *);
+-
+ static int bls_cmp(const void *p0, const void *p1, void *state UNUSED)
+ {
+   struct bls_entry * e0 = *(struct bls_entry **)p0;

@@ -1,0 +1,73 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Javier Martinez Canillas <javierm@redhat.com>
+Date: Mon, 4 Jun 2018 16:10:22 +0200
+Subject: [PATCH] Add relative path to the kernel and initrds BLS fields if
+ needed
+
+The static BLS config file shipped with the kernel package assumes that
+the /boot directory is a mount point, and that the kernel and initramfs
+images relative path is to the root of a boot partition.
+
+But there are cases in which this isn't true, for example if a user has
+its /boot in a btrfs subvolume or if /boot isn't a mount point at all.
+
+So instead of always using the BLS fragment file as distributed by the
+package, check the relative path that GRUB 2 has to use for the images.
+
+Signed-off-by: Javier Martinez Canillas <javierm@redhat.com>
+---
+ util/grub-switch-to-blscfg.in | 20 +++++++++++++++++---
+ 1 file changed, 17 insertions(+), 3 deletions(-)
+
+diff --git a/util/grub-switch-to-blscfg.in b/util/grub-switch-to-blscfg.in
+index 89487ad611c..2482483a437 100644
+--- a/util/grub-switch-to-blscfg.in
++++ b/util/grub-switch-to-blscfg.in
+@@ -188,6 +188,7 @@ fi
+ mkbls() {
+     local kernelver=$1 && shift
+     local datetime=$1 && shift
++    local bootprefix=$1 && shift
+ 
+     local debugname=""
+     local debugid=""
+@@ -206,8 +207,8 @@ mkbls() {
+         cat <<EOF
+ title ${NAME} (${kernelver}) ${VERSION}${debugname}
+ version ${kernelver}${debugid}
+-linux /vmlinuz-${kernelver}
+-initrd /initramfs-${kernelver}.img
++linux ${bootprefix}/vmlinuz-${kernelver}
++initrd ${bootprefix}/initramfs-${kernelver}.img
+ options \$kernelopts
+ id ${ID}-${datetime}-${kernelver}
+ grub_users \$grub_users
+@@ -234,6 +235,16 @@ for kernelver in $(cd /lib/modules/ ; ls -1) "" ; do
+             >"${bls_target}"
+     fi
+ 
++    linux="$(grep '^linux[ \t]' "${bls_target}" | sed -e 's,^linux[ \t]*,,')"
++    initrd="$(grep '^initrd[ \t]' "${bls_target}" | sed -e 's,^initrd[ \t]*,,')"
++    linux_relpath="$("${grub_mkrelpath}" /boot/$linux)"
++    initrd_relpath="$("${grub_mkrelpath}" /boot/$initrd)"
++
++    if [[ $linux != $linux_relpath ]]; then
++        sed -i -e "s,^linux.*,linux ${linux_relpath},g" "${bls_target}"
++        sed -i -e "s,^initrd.*,initrd ${initrd_relpath},g" "${bls_target}"
++    fi
++
+     if [ "x$GRUB_LINUX_MAKE_DEBUG" = "xtrue" ]; then
+         arch="$(uname -m)"
+         bls_debug="$(echo ${bls_target} | sed -e "s/\.${arch}/-debug.${arch}/")"
+@@ -247,7 +258,10 @@ for kernelver in $(cd /lib/modules/ ; ls -1) "" ; do
+ done
+ 
+ if [[ -f "/boot/vmlinuz-0-rescue-${MACHINE_ID}" ]]; then
+-    mkbls "0-rescue-${MACHINE_ID}" "0" >"${blsdir}/${MACHINE_ID}-0-rescue.conf"
++    if [[ $linux != $linux_relpath ]]; then
++        bootprefix="$(dirname ${linux_relpath})"
++    fi
++    mkbls "0-rescue-${MACHINE_ID}" "0" "${bootprefix}" >"${blsdir}/${MACHINE_ID}-0-rescue.conf"
+ fi
+ 
+ GENERATE=0

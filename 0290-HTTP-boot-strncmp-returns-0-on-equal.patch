@@ -1,0 +1,22 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Stephen Benjamin <stephen@redhat.com>
+Date: Fri, 12 Apr 2019 10:43:13 -0400
+Subject: [PATCH] HTTP boot: strncmp returns 0 on equal
+
+---
+ grub-core/net/efi/http.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/grub-core/net/efi/http.c b/grub-core/net/efi/http.c
+index 2a9624dacc4..484e0c68cee 100644
+--- a/grub-core/net/efi/http.c
++++ b/grub-core/net/efi/http.c
+@@ -19,7 +19,7 @@ http_configure (struct grub_efi_net_device *dev, int prefer_ip6)
+   const char *rest, *http_server, *http_path = NULL;
+ 
+   http_server = grub_env_get ("root");
+-  https = grub_strncmp (http_server, "https", 5) ? 1 : 0;
++  https = (grub_strncmp (http_server, "https", 5) == 0) ? 1 : 0;
+ 
+   /* extract http server + port */
+   if (http_server)

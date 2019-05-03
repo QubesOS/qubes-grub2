@@ -1,0 +1,27 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Will Thompson <wjt@endlessm.com>
+Date: Thu, 12 Jul 2018 10:59:10 +0100
+Subject: [PATCH] blscfg: don't leak bls_entry.filename
+
+Zeroing the bls_entry struct before calling grub_free() on one of its
+fields is not going to work too well.
+
+Signed-off-by: Will Thompson <wjt@endlessm.com>
+---
+ grub-core/commands/blscfg.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/grub-core/commands/blscfg.c b/grub-core/commands/blscfg.c
+index a45f40fe67e..11a356de81a 100644
+--- a/grub-core/commands/blscfg.c
++++ b/grub-core/commands/blscfg.c
+@@ -166,8 +166,8 @@ static void bls_free_entry(struct bls_entry *entry)
+     }
+ 
+   grub_free (entry->keyvals);
+-  grub_memset (entry, 0, sizeof (*entry));
+   grub_free (entry->filename);
++  grub_memset (entry, 0, sizeof (*entry));
+   grub_free (entry);
+ }
+ 

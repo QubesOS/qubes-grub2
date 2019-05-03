@@ -1,0 +1,34 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Will Thompson <wjt@endlessm.com>
+Date: Thu, 12 Jul 2018 19:00:42 +0100
+Subject: [PATCH] blscfg: fix compilation on !EFI and !EMU
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Neither GRUB_MACHINE_EFI nor GRUB_MACHINE_EMU are defined when compiling
+for (eg) i386-pc. In this case, #elif GRUB_MACHINE_EMU is an error:
+
+  commands/blscfg.c: In function ‘grub_cmd_blscfg’:
+  commands/blscfg.c:835:7: error: "GRUB_MACHINE_EMU" is not defined [-Werror=undef]
+   #elif GRUB_MACHINE_EMU
+         ^~~~~~~~~~~~~~~~
+
+Signed-off-by: Will Thompson <wjt@endlessm.com>
+---
+ grub-core/commands/blscfg.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/grub-core/commands/blscfg.c b/grub-core/commands/blscfg.c
+index 11a356de81a..53676576ba5 100644
+--- a/grub-core/commands/blscfg.c
++++ b/grub-core/commands/blscfg.c
+@@ -843,7 +843,7 @@ grub_cmd_blscfg (grub_extcmd_context_t ctxt UNUSED,
+   info.platform = PLATFORM_EFI;
+   grub_dprintf ("blscfg", "scanning /EFI/\n");
+   r = fs->dir (dev, "/EFI/", find_entry, &info);
+-#elif GRUB_MACHINE_EMU
++#elif defined(GRUB_MACHINE_EMU)
+   info.platform = PLATFORM_EMU;
+   grub_dprintf ("blscfg", "scanning %s%s\n", GRUB_BOOT_DEVICE,
+ 		GRUB_BLS_CONFIG_PATH);
