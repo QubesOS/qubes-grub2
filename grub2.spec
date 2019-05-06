@@ -585,6 +585,7 @@ Source13:	99-grub-mkconfig.install
 Patch0000: 0000-compiler-unused.patch
 Patch0007: 0007-re-write-.gitignore.patch
 Patch0012: 0012-Move-bash-completion-script-922997.patch
+Patch0041: 0041-Don-t-say-GNU-Linux-in-generated-menus.patch
 Patch0044: 0044-Add-.eh_frame-to-list-of-relocations-stripped.patch
 Patch0048: 0048-Replace-a-lot-of-man-pages-with-slightly-nicer-ones.patch
 Patch0155: 0155-Fixup-for-newer-compiler.patch
