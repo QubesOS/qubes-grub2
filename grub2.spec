@@ -198,8 +198,8 @@
 
 %ifarch x86_64
 %global with_efi_common 1
-%global with_legacy_modules 0
-%global with_legacy_common 0
+%global with_legacy_modules 1
+%global with_legacy_common 1
 %else
 %global with_efi_common 0
 %global with_legacy_common 1
