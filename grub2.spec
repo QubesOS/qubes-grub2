@@ -592,6 +592,7 @@ Patch0188: 0188-Add-auto-hide-menu-support.patch
 Patch0190: 0190-Add-grub-set-bootflag-utility.patch
 Patch0193: 0193-docs-Add-grub-boot-indeterminate.service-example.patch
 Patch0213: 0213-Rename-00_menu_auto_hide.in-to-01_menu_auto_hide.in.patch
+Patch0226: 0226-strip-R-.note.gnu.property-at-more-places.patch
 Patch0220: 0220-Make-it-so-we-can-tell-configure-which-cflags-utils-.patch
 Patch0251: 0251-Reimplement-boot_counter.patch
 ### end grub.patches
