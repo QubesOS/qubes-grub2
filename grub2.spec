@@ -4,6 +4,8 @@
 %undefine _missing_build_ids_terminate_build
 %global _configure_gnuconfig_hack 0
 
+%global efi_vendor qubes
+
 ### begin grub.macros
 # vim:filetype=spec
 # Modules always contain just 32-bit code
