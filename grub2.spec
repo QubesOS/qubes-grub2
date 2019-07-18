@@ -1,6 +1,6 @@
 %undefine _hardened_build
 
-%global tarversion 2.04~rc1
+%global tarversion 2.04
 %undefine _missing_build_ids_terminate_build
 %global _configure_gnuconfig_hack 0
 
@@ -566,15 +566,16 @@ touch ${RPM_BUILD_ROOT}/boot/%{name}/grub.cfg			\
 
 Name:		grub2
 Epoch:		1
-Version:	2.04~rc1
-Release:	2%{?dist}
+Version:	2.04
+Release:	1%{?dist}
 Summary:	Bootloader with support for Linux, Multiboot and more
 License:	GPLv3+
 URL:		http://www.gnu.org/software/grub/
 Obsoletes:	grub < 1:0.98
-Source0:	https://alpha.gnu.org/gnu/grub/grub-%{tarversion}.tar.xz
-#Source0:	https://ftp.gnu.org/gnu/grub/grub-%%{tarversion}.tar.xz
-Source1:	https://alpha.gnu.org/gnu/grub/grub-%{tarversion}.tar.xz.sig
+#Source0:	https://alpha.gnu.org/gnu/grub/grub-%%{tarversion}.tar.xz
+Source0:	https://ftp.gnu.org/gnu/grub/grub-%{tarversion}.tar.xz
+#Source1:	https://alpha.gnu.org/gnu/grub/grub-%%{tarversion}.tar.xz.sig
+Source1:	https://ftp.gnu.org/gnu/grub/grub-%{tarversion}.tar.xz.sig
 Source4:	http://unifoundry.com/unifont-5.1.20080820.pcf.gz
 Source5:	theme.tar.bz2
 Source6:	gitignore
