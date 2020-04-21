@@ -565,7 +565,7 @@ touch ${RPM_BUILD_ROOT}/boot/%{name}/grub.cfg			\
 ### end grub.macros
 
 Name:		grub2
-Epoch:		1
+Epoch:		1000
 Version:	2.04
 Release:	1%{?dist}
 Summary:	Bootloader with support for Linux, Multiboot and more
