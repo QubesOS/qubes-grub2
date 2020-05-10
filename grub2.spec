@@ -5,6 +5,7 @@
 %global _configure_gnuconfig_hack 0
 
 %global efi_vendor qubes
+%global efi_esp_dir /boot/efi/EFI/%{efi_vendor}
 
 ### begin grub.macros
 # vim:filetype=spec
