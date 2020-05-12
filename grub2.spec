@@ -879,8 +879,8 @@ rm -r /boot/grub2.tmp/ || :
 %files common -f grub.lang
 %dir %{_libdir}/grub/
 %dir %{_datarootdir}/grub/
-%dir %{_datarootdir}/grub/themes/
-%exclude %{_datarootdir}/grub/themes/*
+#%dir %{_datarootdir}/grub/themes/
+#%exclude %{_datarootdir}/grub/themes/*
 %attr(0700,root,root) %dir %{_sysconfdir}/grub.d
 %{_prefix}/lib/kernel/install.d/20-grub.install
 %{_prefix}/lib/kernel/install.d/99-grub-mkconfig.install
@@ -889,7 +889,7 @@ rm -r /boot/grub2.tmp/ || :
 %dir /boot/%{name}
 %dir /boot/%{name}/themes/
 %dir /boot/%{name}/themes/system
-%exclude /boot/%{name}/themes/system/*
+#%exclude /boot/%{name}/themes/system/*
 %attr(0700,root,root) %dir /boot/grub2
 %exclude /boot/grub2/*
 %dir %attr(0700,root,root) %{efi_esp_dir}
