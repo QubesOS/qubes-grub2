@@ -568,7 +568,7 @@ touch ${RPM_BUILD_ROOT}/boot/%{name}/grub.cfg			\
 Name:		grub2
 Epoch:		1000
 Version:	2.04
-Release:	1%{?dist}
+Release:	2%{?dist}
 Summary:	Bootloader with support for Linux, Multiboot and more
 License:	GPLv3+
 URL:		http://www.gnu.org/software/grub/
