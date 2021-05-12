@@ -8,13 +8,17 @@ URL := https://ftp.gnu.org/gnu/grub/
 URL_FILE := $(URL)$(SRC_FILE)
 URL_SIGN := $(URL)$(SIGN_FILE)
 
+ifeq ($(FETCH_CMD),)
+$(error "You can not run this Makefile without having FETCH_CMD defined")
+endif
+
 get-sources: $(SRC_FILE) $(SIGN_FILE)
 
 $(SRC_FILE):
-	@wget -q -N $(URL_FILE)
+	@$(FETCH_CMD) $(SRC_FILE) $(URL_FILE)
 
 $(SIGN_FILE):
-	@wget -q -N $(URL_SIGN)
+	@$(FETCH_CMD) $(SIGN_FILE) $(URL_SIGN)
 
 import-keys:
 	@if [ -n "$$GNUPGHOME" ]; then rm -f "$$GNUPGHOME/linux-pvgrub2-trustedkeys.gpg"; fi
