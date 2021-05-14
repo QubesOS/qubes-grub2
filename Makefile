@@ -1,4 +1,4 @@
-VERSION := $(shell cat version)
+VERSION := $(file <version)
 
 SRC_FILE := grub-$(VERSION).tar.xz
 SIGN_FILE := $(SRC_FILE).sig
@@ -15,10 +15,10 @@ endif
 get-sources: $(SRC_FILE) $(SIGN_FILE)
 
 $(SRC_FILE):
-	@$(FETCH_CMD) $(SRC_FILE) $(URL_FILE)
+	@$(FETCH_CMD) $(SRC_FILE) $(URL_FILE) || { echo "Curl failed with code $$?"; exit 1; }
 
 $(SIGN_FILE):
-	@$(FETCH_CMD) $(SIGN_FILE) $(URL_SIGN)
+	@$(FETCH_CMD) $(SIGN_FILE) $(URL_SIGN) || { echo "Curl failed with code $$?"; exit 1; }
 
 import-keys:
 	@if [ -n "$$GNUPGHOME" ]; then rm -f "$$GNUPGHOME/linux-pvgrub2-trustedkeys.gpg"; fi
