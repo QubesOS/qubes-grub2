@@ -1,6 +1,6 @@
 host:
   rpm:
-    spec:
+    build:
     - grub2.spec
 source:
   files:
