@@ -593,6 +593,7 @@ Patch0021: 0021-Fix-bad-test-on-GRUB_DISABLE_SUBMENU.patch
 Patch0041: 0041-Don-t-say-GNU-Linux-in-generated-menus.patch
 Patch0044: 0044-Add-.eh_frame-to-list-of-relocations-stripped.patch
 Patch0048: 0048-Replace-a-lot-of-man-pages-with-slightly-nicer-ones.patch
+Patch0065: 0065-Add-grub-get-kernel-settings-and-use-it-in-10_linux.patch
 Patch0155: 0155-Fixup-for-newer-compiler.patch
 Patch0188: 0188-Add-auto-hide-menu-support.patch
 Patch0190: 0190-Add-grub-set-bootflag-utility.patch
