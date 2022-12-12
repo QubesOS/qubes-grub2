@@ -14,7 +14,7 @@ index c9e1d7a73dc..9859ff4cc79 100644
 --- a/include/grub/compiler.h
 +++ b/include/grub/compiler.h
 @@ -48,4 +48,6 @@
- #  define WARN_UNUSED_RESULT
+ #  define CLANG_PREREQ(maj,min) 0
  #endif
  
 +#define UNUSED __attribute__((__unused__))

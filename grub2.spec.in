@@ -1,3 +1,7 @@
+# This package calls binutils components directly and would need to pass
+# in flags to enable the LTO plugins
+# Disable LTO
+%global _lto_cflags %{nil}
 %undefine _hardened_build
 
 %global tarversion @VERSION@
@@ -6,6 +10,29 @@
 
 %global efi_vendor qubes
 %global efi_esp_dir /boot/efi/EFI/%{efi_vendor}
+%global gnulibversion fixes
+Name:		grub2
+Epoch:		1000
+Version:	@VERSION@
+Release:	@REL@%{?dist}
+Summary:	Bootloader with support for Linux, Multiboot and more
+License:	GPLv3+
+URL:		http://www.gnu.org/software/grub/
+Obsoletes:	grub < 1:0.98
+Source0:	https://ftp.gnu.org/gnu/grub/grub-%{tarversion}.tar.xz
+Source1:	https://ftp.gnu.org/gnu/grub/grub-%{tarversion}.tar.xz.sig
+Source2:	gnulib-%{gnulibversion}.tar.gz
+Source3:	99-grub-mkconfig.install
+Source4:	http://unifoundry.com/unifont-5.1.20080820.pcf.gz
+Source5:	theme.tar.bz2
+Source6:	gitignore
+Source7:	bootstrap
+Source8:	bootstrap.conf
+Source9:	strtoull_test.c
+Source10:	20-grub.install
+Source12:	sbat.csv.in
+Source13:	99-grub-mkconfig.install
+
 
 ### begin grub.macros
 # vim:filetype=spec
@@ -27,40 +54,60 @@
 %global cflags_sed						\\\
 	sed							\\\
 		-e 's/-O. //g'					\\\
-		-e 's/-g /-g3 /g'				\\\
 		-e 's/-fplugin=annobin //g'			\\\
-		-e 's,-specs=/usr/lib/rpm/redhat/redhat-annobin-cc1 ,,g' \\\
+		-e 's,-specs=[[:alnum:]/_-]*annobin[[:alnum:]_-]*,,g' \\\
 		-e 's/-fstack-protector[[:alpha:]-]\\+//g'	\\\
 		-e 's/-Wp,-D_FORTIFY_SOURCE=[[:digit:]]\\+//g'	\\\
 		-e 's/--param=ssp-buffer-size=4//g'		\\\
 		-e 's/-mregparm=3/-mregparm=4/g'		\\\
 		-e 's/-fexceptions//g'				\\\
+		-e 's/-fcf-protection//g'			\\\
 		-e 's/-fasynchronous-unwind-tables//g'		\\\
 		-e 's/^/ -fno-strict-aliasing /'		\\\
 		%{nil}
 
-%global host_cflags %{expand:%%(echo %{optflags} | %{cflags_sed})}
-%global target_cflags %{expand:%%(echo %{optflags} | %{cflags_sed})}
+%global host_cflags %{expand:%%(echo %{build_cflags} %{?_hardening_cflags} | %{cflags_sed})}
+%global legacy_host_cflags					\\\
+	%{expand:%%(echo %{host_cflags} |			\\\
+	%{cflags_sed}						\\\
+		-e 's/-m64//g'					\\\
+		-e 's/-mcpu=power[[:alnum:]]\\+/-mcpu=power6/g'	\\\
+	)}
+%global efi_host_cflags %{expand:%%(echo %{host_cflags})}
 
+%global target_cflags %{expand:%%(echo %{build_cflags} | %{cflags_sed})}
 %global legacy_target_cflags					\\\
 	%{expand:%%(echo %{target_cflags} | 			\\\
 	%{cflags_sed}						\\\
 		-e 's/-m64//g'					\\\
 		-e 's/-mcpu=power[[:alnum:]]\\+/-mcpu=power6/g'	\\\
 	)}
-%global legacy_host_cflags					\\\
-	%{expand:%%(echo %{host_cflags} | 			\\\
-	%{cflags_sed}						\\\
-		-e 's/-m64//g'					\\\
-		-e 's/-mcpu=power[[:alnum:]]\\+/-mcpu=power6/g'	\\\
-	)}
-
-%global efi_host_cflags %{expand:%%(echo %{host_cflags})}
 %global efi_target_cflags %{expand:%%(echo %{target_cflags})}
+
+%global ldflags_sed						\\\
+	sed							\\\
+		-e 's/^$//'					\\\
+		%{nil}
+
+%global host_ldflags %{expand:%%(echo %{build_ldflags} %{?_hardening_ldflags} | %{ldflags_sed})}
+%global legacy_host_ldflags					\\\
+	%{expand:%%(echo %{host_ldflags} |			\\\
+	%{ldflags_sed}						\\\
+	)}
+%global efi_host_ldflags %{expand:%%(echo %{host_ldflags})}
+
+%global target_ldflags %{expand:%%(echo %{build_ldflags} -static | %{ldflags_sed})}
+%global legacy_target_ldflags					\\\
+	%{expand:%%(echo %{target_ldflags} | 			\\\
+	%{ldflags_sed}						\\\
+	)}
+%global efi_target_ldflags %{expand:%%(echo %{target_ldflags})}
 
 %global with_efi_arch 0
 %global with_alt_efi_arch 0
 %global with_legacy_arch 0
+%global with_emu_arch 0
+%global emuarch %{_arch}
 %global grubefiarch %{nil}
 %global grublegacyarch %{nil}
 
@@ -74,6 +121,8 @@
 %endif
 # ppc is always compiled 64 bit
 %ifarch ppc ppc64 ppc64le
+# GRUB emu fails to build on ppc64le
+%global with_emu_arch 0
 %global target_cpu_name %{_arch}
 %global legacy_target_cpu_name powerpc
 %global legacy_package_arch %{_arch}
@@ -104,7 +153,7 @@
 %ifarch aarch64 %{arm}
 %global efi_modules " "
 %else
-%global efi_modules " backtrace chain usb usbserial_common usbserial_pl2303 usbserial_ftdi usbserial_usbdebug "
+%global efi_modules " backtrace chain usb usbserial_common usbserial_pl2303 usbserial_ftdi usbserial_usbdebug keylayouts at_keyboard "
 %endif
 
 %ifarch aarch64 %{arm}
@@ -147,6 +196,7 @@
 %endif
 
 %ifarch aarch64
+%global emuarch arm64
 %global efiarch aa64
 %global target_cpu_name aarch64
 %global grub_target_name arm64-efi
@@ -212,26 +262,23 @@
 %define define_legacy_variant()						\
 %{expand:%%package %%{1}}						\
 Summary:	Bootloader with support for Linux, Multiboot, and more	\
-Group:		System Environment/Base					\
 Provides:	%{name} = %{evr}					\
 Obsoletes:	%{name} < %{evr}					\
 Requires:	%{name}-common = %{evr}					\
 Requires:	%{name}-tools-minimal = %{evr}				\
 Requires:	%{name}-%{1}-modules = %{evr}				\
 Requires:	gettext which file					\
-Requires:	%{name}-tools-extra = %{evr}				\
 Requires:	%{name}-tools = %{evr}					\
 Requires(pre):	dracut							\
 Requires(post): dracut							\
 %{expand:%%description %%{1}}						\
 %{desc}									\
-This subpackage provides support for %%{1} systems.			\
+This subpackage provides support for %{1} systems.			\
 									\
 %{expand:%%{?!buildsubdir:%%define buildsubdir grub-%%{1}-%{tarversion}}}\
 %{expand:%%if 0%%{with_legacy_modules}					\
 %%package %%{1}-modules							\
 Summary:	Modules used to build custom grub images		\
-Group:		System Environment/Base					\
 BuildArch:	noarch							\
 Requires:	%%{name}-common = %%{evr}				\
 %%description %%{1}-modules						\
@@ -243,7 +290,6 @@ This subpackage provides support for rebuilding your own grub.efi.	\
 %{expand:%%{?!buildsubdir:%%define buildsubdir grub-%%{1}-%{tarversion}}}\
 %{expand:%%package %%{1}-tools}						\
 Summary:	Support tools for GRUB.					\
-Group:		System Environment/Base					\
 Requires:	gettext os-prober which file system-logos		\
 Requires:	%{name}-common = %{evr}					\
 Requires:	%{name}-tools-minimal = %{evr}				\
@@ -258,11 +304,9 @@ This subpackage provides tools for support of %%{1} platforms.		\
 %define define_efi_variant(o)						\
 %{expand:%%package %{1}}						\
 Summary:	GRUB for EFI systems.					\
-Group:		System Environment/Base					\
 Requires:	efi-filesystem						\
 Requires:	%{name}-common = %{evr}					\
 Requires:	%{name}-tools-minimal >= %{evr}				\
-Requires:	%{name}-tools-extra = %{evr}				\
 Requires:	%{name}-tools = %{evr}					\
 Provides:	%{name}-efi = %{evr}					\
 %{?legacy_provides:Provides:	%{name} = %{evr}}			\
@@ -276,7 +320,6 @@ This subpackage provides support for %{1} systems.			\
 %{expand:%if 0%{?with_efi_modules}					\
 %{expand:%%package %{1}-modules}					\
 Summary:	Modules used to build custom grub.efi images		\
-Group:		System Environment/Base					\
 BuildArch:	noarch							\
 Requires:	%{name}-common = %{evr}					\
 Provides:	%{name}-efi-modules = %{evr}				\
@@ -288,7 +331,6 @@ This subpackage provides support for rebuilding your own grub.efi.	\
 									\
 %{expand:%%package %{1}-cdboot}						\
 Summary:	Files used to boot removeable media with EFI		\
-Group:		System Environment/Base					\
 Requires:	%{name}-common = %{evr}					\
 Provides:	%{name}-efi-cdboot = %{evr}				\
 %{expand:%%description %{1}-cdboot}					\
@@ -300,7 +342,12 @@ This subpackage provides optional components of grub used with removeable media 
 %setup -q -n grub-%{tarversion}					\
 rm -fv docs/*.info						\
 cp %{SOURCE6} .gitignore					\
-cp %{SOURCE8} ./grub-core/tests/strtoull_test.c			\
+cp %{SOURCE7} bootstrap						\
+cp %{SOURCE8} bootstrap.conf					\
+cp %{SOURCE9} ./grub-core/tests/strtoull_test.c			\
+cp %{SOURCE2} gnulib-%{gnulibversion}.tar.gz			\
+tar -zxf gnulib-%{gnulibversion}.tar.gz				\
+mv gnulib-%{gnulibversion} gnulib				\
 git init							\
 echo '![[:digit:]][[:digit:]]_*.in' > util/grub.d/.gitignore	\
 echo '!*.[[:digit:]]' > util/.gitignore				\
@@ -314,27 +361,23 @@ git commit -a -q -m "%{tarversion} baseline."			\
 #git apply --index --whitespace=nowarn %{SOURCE3}		\
 #git commit -a -q -m "%{tarversion} master."			\
 git am --whitespace=nowarn %%{patches} </dev/null		\
-autoreconf -vfi							\
-git add .							\
-git commit -a -q -m "autoreconf"				\
-autoconf							\
-PYTHON=python3 ./autogen.sh					\
+./bootstrap							\
 %{nil}
 
 %define do_efi_configure()					\
 %configure							\\\
 	%{cc_equals}						\\\
-	HOST_CFLAGS="%{3} -I$(pwd)"				\\\
-	HOST_CPPFLAGS="${CPPFLAGS} -I$(pwd)"			\\\
-	TARGET_CFLAGS="%{2} -I$(pwd)"				\\\
-	TARGET_CPPFLAGS="${CPPFLAGS} -I$(pwd)"			\\\
-	TARGET_LDFLAGS=-static					\\\
+	HOST_CFLAGS="%{3}"					\\\
+	HOST_CPPFLAGS="-I$(pwd)"				\\\
+	HOST_LDFLAGS="%{efi_host_ldflags}"			\\\
+	TARGET_CFLAGS="%{2}"					\\\
+	TARGET_CPPFLAGS="-I$(pwd)"				\\\
+	TARGET_LDFLAGS="%{efi_target_ldflags}"			\\\
 	--with-platform=efi					\\\
 	--with-utils=host					\\\
 	--target=%{1}						\\\
 	--with-grubdir=%{name}					\\\
 	--program-transform-name=s,grub,%{name},		\\\
-	--disable-grub-mount					\\\
 	--disable-werror || ( cat config.log ; exit 1 )		\
 git add .							\
 git commit -m "After efi configure"				\
@@ -355,14 +398,29 @@ for x in grub-mkimage ; do					\\\
 done								\
 %{nil}
 
+%define do_install_protected_file()				\
+touch %{1}.conf							\
+echo %{1} > %{1}.conf						\
+install -d -m 755 ${RPM_BUILD_ROOT}/etc/dnf/protected.d/	\
+install -m 644 %{1}.conf ${RPM_BUILD_ROOT}/etc/dnf/protected.d/ \
+rm -f %{1}.conf							\
+%{nil}
+
 %ifarch x86_64 aarch64 %{arm}
 %define mkimage()						\
 %{4}./grub-mkimage -O %{1} -o %{2}.orig				\\\
-	-p /EFI/%{efi_vendor} -d grub-core ${GRUB_MODULES}	\
+	-p /EFI/%{efi_vendor} -d grub-core ${GRUB_MODULES}	\\\
+	--sbat %{4}./sbat.csv					\
 %{4}./grub-mkimage -O %{1} -o %{3}.orig				\\\
-	-p /EFI/BOOT -d grub-core ${GRUB_MODULES}		\
-%{expand:%%{pesign -s -i %%{2}.orig -o %%{2} -a %%{5} -c %%{6} -n %%{7}}}	\
-%{expand:%%{pesign -s -i %%{3}.orig -o %%{3} -a %%{5} -c %%{6} -n %%{7}}}	\
+	-p /EFI/BOOT -d grub-core ${GRUB_MODULES}		\\\
+	--sbat %{4}./sbat.csv					\
+%{expand:%%define ___pesign_client_cert %{?___pesign_client_cert}%{!?___pesign_client_cert:%{__pesign_client_cert}}} \
+%{?__pesign_client_cert:%{expand:%%define __pesign_client_cert %{___pesign_client_cert}}} \
+%{expand:%%{pesign -s -i %%{2}.orig -o %%{2}.onesig -a %%{5} -c %%{6} -n %%{7}}}	\
+%{expand:%%{pesign -s -i %%{3}.orig -o %%{3}.onesig -a %%{5} -c %%{6} -n %%{7}}}	\
+%{expand:%%define __pesign_client_cert grub2-signer} \
+%{expand:%%{pesign -s -i %%{2}.onesig -o %%{2} -a %%{5} -c %%{6} -n %%{7}}}	\
+%{expand:%%{pesign -s -i %%{3}.onesig -o %%{3} -a %%{5} -c %%{6} -n %%{7}}}	\
 %{nil}
 %else
 %define mkimage()						\
@@ -373,19 +431,24 @@ done								\
 %{nil}
 %endif
 
+### QUBES OS: -blscfg -efi_netns -version +multiboot +multiboot2
+
 %define do_efi_build_images()					\
-GRUB_MODULES="	all_video boot btrfs				\\\
-		cat configfile					\\\
-		echo efifwsetup efinet ext2			\\\
-		fat font gfxmenu gfxterm gzio			\\\
+GRUB_MODULES="	all_video boot btrfs			\\\
+		cat configfile cryptodisk			\\\
+		echo efifwsetup efinet ext2 f2fs	\\\
+		fat font gcry_rijndael gcry_rsa gcry_serpent 	\\\
+		gcry_sha256 gcry_twofish gcry_whirlpool   	\\\
+		gfxmenu gfxterm gzio				\\\
 		halt hfsplus http increment iso9660 jpeg	\\\
-		loadenv loopback linux lvm lsefi lsefimmap	\\\
-		mdraid09 mdraid1x minicmd multiboot multiboot2	\\\
-		net normal part_apple part_msdos part_gpt	\\\
-		password_pbkdf2 png reboot			\\\
-		search search_fs_uuid search_fs_file		\\\
+		loadenv loopback linux lvm lsefi lsefimmap luks	\\\
+		luks2 mdraid09 mdraid1x minicmd net		\\\
+		multiboot multiboot2				\\\
+		normal part_apple part_msdos part_gpt		\\\
+		password_pbkdf2 pgp png reboot			\\\
+		regexp search search_fs_uuid search_fs_file	\\\
 		search_label serial sleep syslinuxcfg test tftp	\\\
-		video xfs"					\
+		video xfs zstd "			\
 GRUB_MODULES+=%{efi_modules}					\
 %{expand:%%{mkimage %{1} %{2} %{3} %{4}}}			\
 %{nil}
@@ -411,19 +474,40 @@ cd ..								\
 cd grub-%{1}-%{tarversion}					\
 %configure							\\\
 	%{cc_equals}						\\\
-	HOST_CFLAGS="%{legacy_host_cflags} -I$(pwd)"		\\\
-	TARGET_CFLAGS="%{legacy_target_cflags} -I$(pwd)"	\\\
-	TARGET_LDFLAGS=-static					\\\
+	HOST_CFLAGS="%{legacy_host_cflags}"			\\\
+	HOST_CPPFLAGS="-I$(pwd)"				\\\
+	HOST_LDFLAGS="%{legacy_host_ldflags}"			\\\
+	TARGET_CFLAGS="%{legacy_target_cflags}"			\\\
+	TARGET_CPPFLAGS="-I$(pwd)"				\\\
+	TARGET_LDFLAGS="%{legacy_target_ldflags}"		\\\
 	--with-platform=%{platform}				\\\
 	--with-utils=host					\\\
 	--target=%{_target_platform}				\\\
 	--with-grubdir=%{name}					\\\
 	--program-transform-name=s,grub,%{name},		\\\
-	--disable-grub-mount					\\\
 	--disable-werror || ( cat config.log ; exit 1 )		\
 git add .							\
-git commit -m "After legacy configure"					\
+git commit -m "After legacy configure"				\
 make %{?_smp_mflags}						\
+cd ..								\
+%{nil}
+
+%define do_emu_build()						\
+cd grub-emu-%{tarversion}					\
+%configure							\\\
+	%{cc_equals}						\\\
+	HOST_CFLAGS="%{legacy_host_cflags}"			\\\
+	HOST_CPPFLAGS="-I$(pwd)"				\\\
+	HOST_LDFLAGS="%{legacy_host_ldflags}"			\\\
+	--with-platform=emu					\\\
+	--with-grubdir=%{name}					\\\
+	--program-transform-name=s,grub,%{name},		\\\
+	--disable-werror || ( cat config.log ; exit 1 )		\
+git add .							\
+git commit -m "After emu configure"				\
+make %{?_smp_mflags} ascii.h widthspec.h			\
+make %{?_smp_mflags} -C grub-core/lib/gnulib			\
+make %{?_smp_mflags} -C grub-core				\
 cd ..								\
 %{nil}
 
@@ -443,6 +527,7 @@ find . '(' -iname gdb_grub					\\\
 find $RPM_BUILD_ROOT -type f -iname "*.mod*" -exec chmod a-x {} '\;'	\
 install -m 700 %{2} $RPM_BUILD_ROOT%{efi_esp_dir}/%{2}	\
 install -m 700 %{3} $RPM_BUILD_ROOT%{efi_esp_dir}/%{3} \
+%{expand:%%do_install_protected_file %{name}-%{alt_package_arch}} \
 cd ..								\
 %{nil}
 
@@ -456,17 +541,18 @@ if [ -f $RPM_BUILD_ROOT%{_infodir}/grub-dev.info ]; then	\
 	rm -f $RPM_BUILD_ROOT%{_infodir}/grub-dev.info		\
 fi								\
 find $RPM_BUILD_ROOT -iname "*.module" -exec chmod a-x {} '\;'	\
-touch $RPM_BUILD_ROOT%{efi_esp_dir}/grub.cfg			\
-ln -sf ..%{efi_esp_dir}/grub.cfg				\\\
+ln -s ../boot/%{name}/grub.cfg					\\\
 	$RPM_BUILD_ROOT%{_sysconfdir}/%{name}-efi.cfg		\
 install -m 700 %{2} $RPM_BUILD_ROOT%{efi_esp_dir}/%{2}		\
 install -m 700 %{3} $RPM_BUILD_ROOT%{efi_esp_dir}/%{3}		\
+%ifarch %{arm}							\
+install -D -m 700 %{2} $RPM_BUILD_ROOT%{efi_esp_boot}/BOOTARM.EFI \
+%endif								\
 install -D -m 700 unicode.pf2					\\\
 	$RPM_BUILD_ROOT%{efi_esp_dir}/fonts/unicode.pf2		\
 ${RPM_BUILD_ROOT}/%{_bindir}/%{name}-editenv			\\\
-	${RPM_BUILD_ROOT}%{efi_esp_dir}/grubenv create		\
-ln -sf ../efi/EFI/%{efi_vendor}/grubenv				\\\
-	$RPM_BUILD_ROOT/boot/grub2/grubenv			\
+		${RPM_BUILD_ROOT}/boot/%{name}/grubenv create	\
+%{expand:%%do_install_protected_file %{name}-%{package_arch}}	\
 cd ..								\
 %{nil}
 
@@ -479,8 +565,6 @@ fi								\
 if [ -f $RPM_BUILD_ROOT%{_infodir}/grub-dev.info ]; then	\
 	rm -f $RPM_BUILD_ROOT%{_infodir}/grub-dev.info		\
 fi								\
-ln -s ../boot/%{name}/grub.cfg					\\\
-	${RPM_BUILD_ROOT}%{_sysconfdir}/grub2.cfg		\
 if [ -f $RPM_BUILD_ROOT/%{_libdir}/grub/%{1}/grub2.chrp ]; then \
 	mv $RPM_BUILD_ROOT/%{_libdir}/grub/%{1}/grub2.chrp	\\\
 	   $RPM_BUILD_ROOT/%{_libdir}/grub/%{1}/grub.chrp	\
@@ -488,6 +572,23 @@ fi								\
 if [ %{3} -eq 0 ]; then						\
 	${RPM_BUILD_ROOT}/%{_bindir}/%{name}-editenv		\\\
 		${RPM_BUILD_ROOT}/boot/%{name}/grubenv create	\
+fi								\
+%{expand:%%do_install_protected_file %{name}-%{legacy_package_arch}} \
+cd ..								\
+%{nil}
+
+%define do_emu_install()					\
+cd grub-emu-%{tarversion}					\
+make DESTDIR=$RPM_BUILD_ROOT install -C grub-core		\
+if [ -f $RPM_BUILD_ROOT%{_infodir}/grub.info ]; then		\
+	rm -f $RPM_BUILD_ROOT%{_infodir}/grub.info		\
+fi								\
+if [ -f $RPM_BUILD_ROOT%{_infodir}/grub-dev.info ]; then	\
+	rm -f $RPM_BUILD_ROOT%{_infodir}/grub-dev.info		\
+fi								\
+if [ -f $RPM_BUILD_ROOT/%{_libdir}/grub/%{1}/grub2.chrp ]; then \
+	mv $RPM_BUILD_ROOT/%{_libdir}/grub/%{1}/grub2.chrp	\\\
+	   $RPM_BUILD_ROOT/%{_libdir}/grub/%{1}/grub.chrp	\
 fi								\
 cd ..								\
 %{nil}
@@ -512,6 +613,8 @@ touch ${RPM_BUILD_ROOT}%{_sysconfdir}/default/grub		\
 ln -sf ../default/grub						\\\
 	${RPM_BUILD_ROOT}%{_sysconfdir}/sysconfig/grub		\
 touch ${RPM_BUILD_ROOT}/boot/%{name}/grub.cfg			\
+ln -s ../boot/%{name}/grub.cfg					\\\
+	${RPM_BUILD_ROOT}%{_sysconfdir}/grub2.cfg		\
 %{nil}
 
 %define define_legacy_variant_files()				\
@@ -520,6 +623,7 @@ touch ${RPM_BUILD_ROOT}/boot/%{name}/grub.cfg			\
 %config(noreplace) %{_sysconfdir}/%{name}.cfg			\
 %ghost %config(noreplace) /boot/%{name}/grub.cfg		\
 %dir %attr(0700,root,root)/boot/loader/entries			\
+%attr(0644,root,root) %config(noreplace) /etc/dnf/protected.d/%{name}-%{1}.conf \
 								\
 %{expand:%if 0%{?with_legacy_modules}				\
 %{expand:%%files %{1}-modules}					\
@@ -537,13 +641,18 @@ touch ${RPM_BUILD_ROOT}/boot/%{name}/grub.cfg			\
 %define define_efi_variant_files()				\
 %{expand:%%files %{1}}						\
 %defattr(0700,root,root,-)					\
+%config(noreplace) %{_sysconfdir}/%{name}.cfg			\
 %config(noreplace) %{_sysconfdir}/%{name}-efi.cfg		\
 %attr(0700,root,root)%{efi_esp_dir}/%{2}			\
+%ifarch %{arm}							\
+%attr(0700,root,root)%{efi_esp_boot}/BOOTARM.EFI		\
+%endif								\
 %dir %attr(0700,root,root)%{efi_esp_dir}/fonts			\
 %dir %attr(0700,root,root)/boot/loader/entries			\
+%ghost %config(noreplace) /boot/%{name}/grub.cfg		\
 %ghost %config(noreplace) %attr(0700,root,root)%{efi_esp_dir}/grub.cfg	\
-%config(noreplace) /boot/grub2/grubenv					\
-%ghost %config(noreplace) %attr(0700,root,root)%{efi_esp_dir}/grubenv	\
+%config(noreplace) %verify(not size mode md5 mtime) /boot/grub2/grubenv	\
+%attr(0644,root,root) %config(noreplace) /etc/dnf/protected.d/%{name}-%{1}.conf \
 %{expand:%if 0%{?without_efi_modules}				\
 %exclude %{_libdir}/grub/%{6}					\
 %exclude %{_libdir}/grub/%{6}/*					\
@@ -562,55 +671,88 @@ touch ${RPM_BUILD_ROOT}/boot/%{name}/grub.cfg			\
 %attr(0700,root,root)%{efi_esp_dir}/%{3}			\
 %attr(0700,root,root)%{efi_esp_dir}/fonts			\
 %{nil}
-
 ### end grub.macros
-
-Name:		grub2
-Epoch:		1000
-Version:	@VERSION@
-Release:	@REL@%{?dist}
-Summary:	Bootloader with support for Linux, Multiboot and more
-License:	GPLv3+
-URL:		http://www.gnu.org/software/grub/
-Obsoletes:	grub < 1:0.98
-#Source0:	https://alpha.gnu.org/gnu/grub/grub-%%{tarversion}.tar.xz
-Source0:	https://ftp.gnu.org/gnu/grub/grub-%{tarversion}.tar.xz
-#Source1:	https://alpha.gnu.org/gnu/grub/grub-%%{tarversion}.tar.xz.sig
-Source1:	https://ftp.gnu.org/gnu/grub/grub-%{tarversion}.tar.xz.sig
-Source4:	http://unifoundry.com/unifont-5.1.20080820.pcf.gz
-Source5:	theme.tar.bz2
-Source6:	gitignore
-Source8:	strtoull_test.c
-Source9:	20-grub.install
-Source13:	99-grub-mkconfig.install
 
 ### begin grub.patches
 # extracted from 0111-Add-blscfg-command-support-to-parse-BootLoaderSpec-c.patch
 Patch0000: 0000-compiler-unused.patch
-Patch0007: 0007-re-write-.gitignore.patch
-Patch0012: 0012-Move-bash-completion-script-922997.patch
-Patch0021: 0021-Fix-bad-test-on-GRUB_DISABLE_SUBMENU.patch
-Patch0041: 0041-Don-t-say-GNU-Linux-in-generated-menus.patch
-Patch0044: 0044-Add-.eh_frame-to-list-of-relocations-stripped.patch
-Patch0048: 0048-Replace-a-lot-of-man-pages-with-slightly-nicer-ones.patch
-Patch0155: 0155-Fixup-for-newer-compiler.patch
-Patch0188: 0188-Add-auto-hide-menu-support.patch
-Patch0190: 0190-Add-grub-set-bootflag-utility.patch
-Patch0193: 0193-docs-Add-grub-boot-indeterminate.service-example.patch
-Patch0213: 0213-Rename-00_menu_auto_hide.in-to-01_menu_auto_hide.in.patch
-Patch0226: 0226-strip-R-.note.gnu.property-at-more-places.patch
-Patch0220: 0220-Make-it-so-we-can-tell-configure-which-cflags-utils-.patch
-Patch0251: 0251-Reimplement-boot_counter.patch
+Patch0010: 0010-re-write-.gitignore.patch
+Patch0014: 0014-Move-bash-completion-script-922997.patch
+Patch0015: 0015-Allow-fallback-to-include-entries-by-title-not-just-.patch
+Patch0017: 0017-Make-efi-machines-load-an-env-block-from-a-variable.patch
+Patch0019: 0019-Add-fw_path-variable-revised.patch
+Patch0024: 0024-Don-t-print-GNU-GRUB-header.patch
+Patch0032: 0032-Enable-pager-by-default.-985860.patch
+Patch0034: 0034-Don-t-say-GNU-Linux-in-generated-menus.patch
+Patch0037: 0037-Add-.eh_frame-to-list-of-relocations-stripped.patch
+Patch0038: 0038-Don-t-require-a-password-to-boot-entries-generated-b.patch
+Patch0040: 0040-Replace-a-lot-of-man-pages-with-slightly-nicer-ones.patch
+Patch0043: 0043-Generate-OS-and-CLASS-in-10_linux-from-etc-os-releas.patch
+Patch0047: 0047-Make-grub2-mkconfig-construct-titles-that-look-like-.patch
+Patch0048: 0048-Add-friendly-grub2-password-config-tool-985962.patch
+Patch0051: 0051-Add-grub-get-kernel-settings-and-use-it-in-10_linux.patch
+Patch0053: 0053-Make-grub_fatal-also-backtrace.patch
+Patch0055: 0055-Make-our-info-pages-say-grub2-where-appropriate.patch
+Patch0056: 0056-macos-just-build-chainloader-entries-don-t-try-any-x.patch
+Patch0057: 0057-grub2-btrfs-Add-ability-to-boot-from-subvolumes.patch
+Patch0058: 0058-export-btrfs_subvol-and-btrfs_subvolid.patch
+Patch0059: 0059-grub2-btrfs-03-follow_default.patch
+Patch0060: 0060-grub2-btrfs-04-grub2-install.patch
+Patch0061: 0061-grub2-btrfs-05-grub2-mkconfig.patch
+Patch0062: 0062-grub2-btrfs-06-subvol-mount.patch
+Patch0063: 0063-Fallback-to-old-subvol-name-scheme-to-support-old-sn.patch
+Patch0064: 0064-Grub-not-working-correctly-with-btrfs-snapshots-bsc-.patch
+Patch0071: 0071-20_linux_xen-load-xen-or-multiboot-2-modules-as-need.patch
+Patch0081: 0081-Make-it-possible-to-enabled-build-id-sha1.patch
+Patch0084: 0084-Fixup-for-newer-compiler.patch
+Patch0086: 0086-Fixup-for-newer-compiler.patch
+Patch0097: 0097-grub-editenv-Add-incr-command-to-increment-integer-v.patch
+Patch0098: 0098-Add-auto-hide-menu-support.patch
+Patch0099: 0099-Add-grub-set-bootflag-utility.patch
+Patch0100: 0100-docs-Add-grub-boot-indeterminate.service-example.patch
+Patch0101: 0101-gentpl-add-disable-support.patch
+Patch0102: 0102-gentpl-add-pc-firmware-type.patch
+Patch0105: 0105-Make-it-so-we-can-tell-configure-which-cflags-utils-.patch
+Patch0116: 0116-Attempt-to-fix-up-all-the-places-Wsign-compare-error.patch
+Patch0117: 0117-Don-t-use-Wno-sign-compare-Wno-conversion-Wno-error-.patch
+Patch0122: 0122-Fix-getroot.c-s-trampolines.patch
+Patch0123: 0123-Do-not-allow-stack-trampolines-anywhere.patch
+Patch0124: 0124-Reimplement-boot_counter.patch
+Patch0125: 0125-Fix-menu-entry-selection-based-on-ID-and-title.patch
+Patch0126: 0126-Make-the-menu-entry-users-option-argument-to-be-opti.patch
+Patch0127: 0127-Add-efi-export-env-and-efi-load-env-commands.patch
+Patch0128: 0128-Make-it-possible-to-subtract-conditions-from-debug.patch
+Patch0129: 0129-Export-all-variables-from-the-initial-context-when-c.patch
+Patch0130: 0130-grub.d-Split-out-boot-success-reset-from-menu-auto-h.patch
+Patch0136: 0136-Use-git-to-apply-gnulib-patches.patch
+Patch0138: 0138-grub-set-bootflag-Update-comment-about-running-as-ro.patch
+Patch0139: 0139-grub-set-bootflag-Write-new-env-to-tmpfile-and-then-.patch
+Patch0140: 0140-grub.d-Fix-boot_indeterminate-getting-set-on-boot_su.patch
+Patch0144: 0144-bootstrap.conf-Force-autogen.sh-to-use-python3.patch
+Patch0155: 0155-Fix-a-missing-return-in-efi-export-env-and-efi-load-.patch
+Patch0166: 0166-Add-systemd-integration-scripts-to-make-systemctl-re.patch
+Patch0167: 0167-systemd-integration.sh-Also-set-old-menu_show_once-g.patch
+Patch0168: 0168-at_keyboard-use-set-1-when-keyboard-is-in-Translate-.patch
+Patch0169: 0169-grub-install-disable-support-for-EFI-platforms.patch
+Patch0172: 0172-Introduce-function-grub_debug_is_enabled-void-return.patch
+Patch0173: 0173-Don-t-clear-screen-when-debugging-is-enabled.patch
+Patch0178: 0178-Add-at_keyboard_fallback_set-var-to-force-the-set-ma.patch
+Patch0210: 0210-Suppress-gettext-error-message.patch
+Patch0214: 0214-templates-Check-for-EFI-at-runtime-instead-of-config.patch
+Patch0215: 0215-efi-Print-an-error-if-boot-to-firmware-setup-is-not-.patch
 ### end grub.patches
+
+# non-Fedora patches
+Patch1000: 1000-templates-linux_xen-fix-detecting-xsm-policy.patch
 
 
 BuildRequires:	gcc efi-srpm-macros
 BuildRequires:	flex bison binutils python3
 BuildRequires:	ncurses-devel xz-devel bzip2-devel
 BuildRequires:	freetype-devel libusb-devel
-BuildRequires:	rpm-devel
+BuildRequires:	fuse-devel
 BuildRequires:	rpm-devel rpm-libs
-BuildRequires:	autoconf automake autogen device-mapper-devel
+BuildRequires:	autoconf automake device-mapper-devel
 BuildRequires:	freetype-devel gettext-devel git
 BuildRequires:	texinfo
 BuildRequires:	dejavu-sans-fonts
@@ -647,6 +789,7 @@ hardware devices.\
 Summary:	grub2 common layout
 BuildArch:	noarch
 Conflicts:	grubby < 8.40-18
+Requires(post): util-linux
 
 %description common
 This package provides some directories which are required by various grub2
@@ -707,12 +850,32 @@ This subpackage provides tools for support of all platforms.
 %{expand:%define_legacy_variant %%{legacy_package_arch}}
 %endif
 
+%if 0%{with_emu_arch}
+%package emu
+Summary:	GRUB user-space emulation.
+Requires:	%{name}-tools-minimal = %{epoch}:%{version}-%{release}
+
+%description emu
+%{desc}
+This subpackage provides the GRUB user-space emulation support of all platforms.
+
+%package emu-modules
+Summary:	GRUB user-space emulation modules.
+Requires:	%{name}-tools-minimal = %{epoch}:%{version}-%{release}
+
+%description emu-modules
+%{desc}
+This subpackage provides the GRUB user-space emulation modules.
+%endif
+
 %prep
 %do_common_setup
 %if 0%{with_efi_arch}
 mkdir grub-%{grubefiarch}-%{tarversion}
 grep -A100000 '# stuff "make" creates' .gitignore > grub-%{grubefiarch}-%{tarversion}/.gitignore
 cp %{SOURCE4} grub-%{grubefiarch}-%{tarversion}/unifont.pcf.gz
+sed -e "s,@@VERSION@@,%{version},g" -e "s,@@VERSION_RELEASE@@,%{version}-%{release},g" \
+    %{SOURCE12} > grub-%{grubefiarch}-%{tarversion}/sbat.csv
 git add grub-%{grubefiarch}-%{tarversion}
 %endif
 %if 0%{with_alt_efi_arch}
@@ -727,6 +890,12 @@ grep -A100000 '# stuff "make" creates' .gitignore > grub-%{grublegacyarch}-%{tar
 cp %{SOURCE4} grub-%{grublegacyarch}-%{tarversion}/unifont.pcf.gz
 git add grub-%{grublegacyarch}-%{tarversion}
 %endif
+%if 0%{with_emu_arch}
+mkdir grub-emu-%{tarversion}
+grep -A100000 '# stuff "make" creates' .gitignore > grub-emu-%{tarversion}/.gitignore
+cp %{SOURCE4} grub-emu-%{tarversion}/unifont.pcf.gz
+git add grub-emu-%{tarversion}
+%endif
 git commit -m "After making subdirs"
 
 %build
@@ -738,6 +907,9 @@ git commit -m "After making subdirs"
 %endif
 %if 0%{with_legacy_arch}
 %{expand:%do_legacy_build %%{grublegacyarch}}
+%endif
+%if 0%{with_emu_arch}
+%{expand:%do_emu_build}
 %endif
 makeinfo --info --no-split -I docs -o docs/grub-dev.info \
 	docs/grub-dev.texi
@@ -762,6 +934,9 @@ rm -fr $RPM_BUILD_ROOT
 %if 0%{with_legacy_arch}
 %{expand:%do_legacy_install %%{grublegacyarch} %%{alt_grub_target_name} 0%{with_efi_arch}}
 %endif
+%if 0%{with_emu_arch}
+%{expand:%do_emu_install %%{package_arch}}
+%endif
 rm -f $RPM_BUILD_ROOT%{_infodir}/dir
 ln -s %{name}-set-password ${RPM_BUILD_ROOT}/%{_sbindir}/%{name}-setpassword
 echo '.so man8/%{name}-set-password.8' > ${RPM_BUILD_ROOT}/%{_datadir}/man/man8/%{name}-setpassword.8
@@ -770,6 +945,7 @@ rm -vf ${RPM_BUILD_ROOT}/%{_bindir}/%{name}-render-label
 rm -vf ${RPM_BUILD_ROOT}/%{_sbindir}/%{name}-bios-setup
 rm -vf ${RPM_BUILD_ROOT}/%{_sbindir}/%{name}-macbless
 %endif
+%{expand:%%do_install_protected_file %{name}-tools-minimal}
 
 %find_lang grub
 
@@ -779,6 +955,7 @@ cat << EOF > ${RPM_BUILD_ROOT}%{_sysconfdir}/prelink.conf.d/grub2.conf
 # these have execstack, and break under selinux
 -b /usr/bin/grub2-script-check
 -b /usr/bin/grub2-mkrelpath
+-b /usr/bin/grub2-mount
 -b /usr/bin/grub2-fstest
 -b /usr/sbin/grub2-bios-setup
 -b /usr/sbin/grub2-probe
@@ -787,8 +964,8 @@ EOF
 
 # Install kernel-install scripts
 install -d -m 0755 %{buildroot}%{_prefix}/lib/kernel/install.d/
-install -D -m 0755 -t %{buildroot}%{_prefix}/lib/kernel/install.d/ %{SOURCE9}
-install -D -m 0755 -t %{buildroot}%{_prefix}/lib/kernel/install.d/ %{SOURCE13}
+install -D -m 0755 -t %{buildroot}%{_prefix}/lib/kernel/install.d/ %{SOURCE10}
+install -D -m 0755 -t %{buildroot}%{_prefix}/lib/kernel/install.d/ %{SOURCE3}
 install -d -m 0755 %{buildroot}%{_sysconfdir}/kernel/install.d/
 # Install systemd user service to set the boot_success flag
 install -D -m 0755 -t %{buildroot}%{_userunitdir} \
@@ -799,8 +976,11 @@ ln -s ../grub-boot-success.timer \
 # Install systemd system-update unit to set boot_indeterminate for offline-upd
 install -D -m 0755 -t %{buildroot}%{_unitdir} docs/grub-boot-indeterminate.service
 install -d -m 0755 %{buildroot}%{_unitdir}/system-update.target.wants
+install -d -m 0755 %{buildroot}%{_unitdir}/reboot.target.wants
 ln -s ../grub-boot-indeterminate.service \
 	%{buildroot}%{_unitdir}/system-update.target.wants
+ln -s ../%{name}-systemd-integration.service \
+	%{buildroot}%{_unitdir}/reboot.target.wants
 
 # Don't run debuginfo on all the grub modules and whatnot; it just
 # rejects them, complains, and slows down extraction.
@@ -824,9 +1004,9 @@ ln -s ../grub-boot-indeterminate.service \
 %undefine buildsubdir
 
 %pre tools
-if [ -f /boot/grub2/user.cfg ]; then
-    if grep -q '^GRUB_PASSWORD=' /boot/grub2/user.cfg ; then
-	sed -i 's/^GRUB_PASSWORD=/GRUB2_PASSWORD=/' /boot/grub2/user.cfg
+if [ -f /boot/%{name}/user.cfg ]; then
+    if grep -q '^GRUB_PASSWORD=' /boot/%{name}/user.cfg ; then
+	sed -i 's/^GRUB_PASSWORD=/GRUB2_PASSWORD=/' /boot/%{name}/user.cfg
     fi
 elif [ -f %{efi_esp_dir}/user.cfg ]; then
     if grep -q '^GRUB_PASSWORD=' %{efi_esp_dir}/user.cfg ; then
@@ -842,12 +1022,12 @@ elif [ -f /etc/grub.d/01_users ] && \
 		sed 's/^password_pbkdf2 root \(.*\)$/GRUB2_PASSWORD=\1/' \
 	    > %{efi_esp_dir}/user.cfg
     fi
-    if [ -f /boot/grub2/grub.cfg ]; then
-	install -m 0600 /dev/null /boot/grub2/user.cfg
-	chmod 0600 /boot/grub2/user.cfg
+    if [ -f /boot/%{name}/grub.cfg ]; then
+	install -m 0600 /dev/null /boot/%{name}/user.cfg
+	chmod 0600 /boot/%{name}/user.cfg
 	grep '^password_pbkdf2 root' /etc/grub.d/01_users | \
 		sed 's/^password_pbkdf2 root \(.*\)$/GRUB2_PASSWORD=\1/' \
-	    > /boot/grub2/user.cfg
+	    > /boot/%{name}/user.cfg
     fi
 fi
 
@@ -876,11 +1056,49 @@ mv -f /boot/grub2.tmp/*.mod \
       /boot/grub2/ &&
 rm -r /boot/grub2.tmp/ || :
 
+%posttrans common
+set -eu
+
+EFI_HOME=%{efi_esp_dir}
+GRUB_HOME=/boot/%{name}
+ESP_PATH=/boot/efi
+
+if ! mountpoint -q ${ESP_PATH}; then
+    exit 0 # no ESP mounted, nothing to do
+fi
+
+if test ! -f ${EFI_HOME}/grub.cfg; then
+    # there's no config in ESP, create one
+    grub2-mkconfig -o ${EFI_HOME}/grub.cfg
+fi
+
+if grep -q "configfile" ${EFI_HOME}/grub.cfg; then
+    exit 0 # already unified, nothing to do
+fi
+
+# create a stub grub2 config in EFI
+BOOT_UUID=$(%{name}-probe --target=fs_uuid ${GRUB_HOME})
+GRUB_DIR=$(%{name}-mkrelpath ${GRUB_HOME})
+
+cat << EOF > ${EFI_HOME}/grub.cfg.stb
+search --no-floppy --fs-uuid --set=dev ${BOOT_UUID}
+set prefix=(\$dev)${GRUB_DIR}
+export \$prefix
+configfile \$prefix/grub.cfg
+EOF
+
+if test -f ${EFI_HOME}/grubenv; then
+    cp -a ${EFI_HOME}/grubenv ${EFI_HOME}/grubenv.rpmsave
+    mv --force ${EFI_HOME}/grubenv ${GRUB_HOME}/grubenv
+fi
+
+cp -a ${EFI_HOME}/grub.cfg ${EFI_HOME}/grub.cfg.rpmsave
+cp -a ${EFI_HOME}/grub.cfg ${GRUB_HOME}/
+mv ${EFI_HOME}/grub.cfg.stb ${EFI_HOME}/grub.cfg
+
 %files common -f grub.lang
 %dir %{_libdir}/grub/
 %dir %{_datarootdir}/grub/
-#%dir %{_datarootdir}/grub/themes/
-#%exclude %{_datarootdir}/grub/themes/*
 %attr(0700,root,root) %dir %{_sysconfdir}/grub.d
 %{_prefix}/lib/kernel/install.d/20-grub.install
 %{_prefix}/lib/kernel/install.d/99-grub-mkconfig.install
@@ -889,30 +1107,30 @@ rm -r /boot/grub2.tmp/ || :
 %dir /boot/%{name}
 %dir /boot/%{name}/themes/
 %dir /boot/%{name}/themes/system
-#%exclude /boot/%{name}/themes/system/*
-%attr(0700,root,root) %dir /boot/grub2
-%exclude /boot/grub2/*
+%attr(0700,root,root) %dir /boot/%{name}
+%exclude /boot/%{name}/*
 %dir %attr(0700,root,root) %{efi_esp_dir}
 %exclude %{efi_esp_dir}/*
+%ghost %config(noreplace) %verify(not size mode md5 mtime) /boot/%{name}/grubenv
 %license COPYING
-%ghost %config(noreplace) /boot/grub2/grubenv
-%doc INSTALL
-%doc NEWS
-%doc README
 %doc THANKS
-%doc TODO
 %doc docs/grub.html
 %doc docs/grub-dev.html
 %doc docs/font_char_metrics.png
 
 %files tools-minimal
 %{_sysconfdir}/prelink.conf.d/grub2.conf
+%{_sbindir}/%{name}-get-kernel-settings
+%{_sbindir}/%{name}-probe
 %attr(4755, root, root) %{_sbindir}/%{name}-set-bootflag
 %{_sbindir}/%{name}-set-default
 %{_sbindir}/%{name}-set*password
 %{_bindir}/%{name}-editenv
 %{_bindir}/%{name}-mkpasswd-pbkdf2
+%{_bindir}/%{name}-mount
+%attr(0644,root,root) %config(noreplace) /etc/dnf/protected.d/%{name}-tools-minimal.conf
 
+%{_datadir}/man/man3/%{name}-get-kernel-settings*
 %{_datadir}/man/man8/%{name}-set-default*
 %{_datadir}/man/man8/%{name}-set*password*
 %{_datadir}/man/man1/%{name}-editenv*
@@ -920,10 +1138,12 @@ rm -r /boot/grub2.tmp/ || :
 
 %ifarch x86_64
 %files tools-efi
-%{_sbindir}/%{name}-macbless
+%{_bindir}/%{name}-glue-efi
 %{_bindir}/%{name}-render-label
-%{_datadir}/man/man8/%{name}-macbless*
+%{_sbindir}/%{name}-macbless
+%{_datadir}/man/man1/%{name}-glue-efi*
 %{_datadir}/man/man1/%{name}-render-label*
+%{_datadir}/man/man8/%{name}-macbless*
 %endif
 
 %files tools
@@ -935,6 +1155,9 @@ rm -r /boot/grub2.tmp/ || :
 %{_userunitdir}/timers.target.wants
 %{_unitdir}/grub-boot-indeterminate.service
 %{_unitdir}/system-update.target.wants
+%{_unitdir}/%{name}-systemd-integration.service
+%{_unitdir}/reboot.target.wants
+%{_unitdir}/systemd-logind.service.d
 %{_infodir}/%{name}*
 %{_datarootdir}/grub/*
 %{_sbindir}/%{name}-install
@@ -942,18 +1165,17 @@ rm -r /boot/grub2.tmp/ || :
 %exclude %{_datarootdir}/grub/*.h
 %{_datarootdir}/bash-completion/completions/grub
 %{_sbindir}/%{name}-mkconfig
-%{_sbindir}/%{name}-probe
 %{_sbindir}/%{name}-reboot
 %{_bindir}/%{name}-file
 %{_bindir}/%{name}-menulst2cfg
 %{_bindir}/%{name}-mkimage
 %{_bindir}/%{name}-mkrelpath
 %{_bindir}/%{name}-script-check
+%{_libexecdir}/%{name}
 %{_datadir}/man/man?/*
 
 # exclude man pages from tools-extra
 %exclude %{_datadir}/man/man8/%{name}-sparc64-setup*
-%exclude %{_datadir}/man/man8/%{name}-install*
 %exclude %{_datadir}/man/man1/%{name}-fstest*
 %exclude %{_datadir}/man/man1/%{name}-glue-efi*
 %exclude %{_datadir}/man/man1/%{name}-kbdcomp*
@@ -965,6 +1187,7 @@ rm -r /boot/grub2.tmp/ || :
 %exclude %{_datadir}/man/man1/%{name}-syslinux2cfg*
 
 # exclude man pages from tools-minimal
+%exclude %{_datadir}/man/man3/%{name}-get-kernel-settings*
 %exclude %{_datadir}/man/man8/%{name}-set-default*
 %exclude %{_datadir}/man/man8/%{name}-set*password*
 %exclude %{_datadir}/man/man1/%{name}-editenv*
@@ -995,32 +1218,33 @@ rm -r /boot/grub2.tmp/ || :
 %endif
 
 %files tools-extra
-%{_sbindir}/%{name}-sparc64-setup
-%{_sbindir}/%{name}-ofpathname
 %{_bindir}/%{name}-fstest
-%{_bindir}/%{name}-glue-efi
 %{_bindir}/%{name}-kbdcomp
 %{_bindir}/%{name}-mkfont
 %{_bindir}/%{name}-mklayout
 %{_bindir}/%{name}-mknetdir
 %ifnarch %{sparc}
 %{_bindir}/%{name}-mkrescue
+%{_datadir}/man/man1/%{name}-mkrescue*
+%else
+%exclude %{_datadir}/man/man1/%{name}-mkrescue*
 %endif
 %{_bindir}/%{name}-mkstandalone
 %{_bindir}/%{name}-syslinux2cfg
 %{_sysconfdir}/sysconfig/grub
-%{_datadir}/man/man8/%{name}-sparc64-setup*
-%{_datadir}/man/man8/%{name}-install*
 %{_datadir}/man/man1/%{name}-fstest*
-%{_datadir}/man/man1/%{name}-glue-efi*
 %{_datadir}/man/man1/%{name}-kbdcomp*
 %{_datadir}/man/man1/%{name}-mkfont*
 %{_datadir}/man/man1/%{name}-mklayout*
 %{_datadir}/man/man1/%{name}-mknetdir*
-%{_datadir}/man/man1/%{name}-mkrescue*
 %{_datadir}/man/man1/%{name}-mkstandalone*
-%{_datadir}/man/man8/%{name}-ofpathname*
 %{_datadir}/man/man1/%{name}-syslinux2cfg*
+%exclude %{_bindir}/%{name}-glue-efi
+%exclude %{_sbindir}/%{name}-sparc64-setup
+%exclude %{_sbindir}/%{name}-ofpathname
+%exclude %{_datadir}/man/man1/%{name}-glue-efi*
+%exclude %{_datadir}/man/man8/%{name}-ofpathname*
+%exclude %{_datadir}/man/man8/%{name}-sparc64-setup*
 %exclude %{_datarootdir}/grub/themes/starfield
 
 %if 0%{with_efi_arch}
@@ -1031,6 +1255,16 @@ rm -r /boot/grub2.tmp/ || :
 %endif
 %if 0%{with_legacy_arch}
 %{expand:%define_legacy_variant_files %%{legacy_package_arch} %%{grublegacyarch}}
+%endif
+
+%if 0%{with_emu_arch}
+%files emu
+%{_bindir}/%{name}-emu*
+%{_datadir}/man/man1/%{name}-emu*
+
+%files emu-modules
+%{_libdir}/grub/%{emuarch}-emu/*
+%exclude %{_libdir}/grub/%{emuarch}-emu/*.module
 %endif
 
 %changelog
