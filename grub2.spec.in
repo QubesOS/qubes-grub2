@@ -2,7 +2,9 @@
 # in flags to enable the LTO plugins
 # Disable LTO
 %global _lto_cflags %{nil}
+
 %undefine _hardened_build
+%undefine _package_note_file
 
 %global tarversion @VERSION@
 %undefine _missing_build_ids_terminate_build
@@ -262,13 +264,13 @@ Source13:	99-grub-mkconfig.install
 %define define_legacy_variant()						\
 %{expand:%%package %%{1}}						\
 Summary:	Bootloader with support for Linux, Multiboot, and more	\
-Provides:	%{name} = %{evr}					\
-Obsoletes:	%{name} < %{evr}					\
-Requires:	%{name}-common = %{evr}					\
-Requires:	%{name}-tools-minimal = %{evr}				\
-Requires:	%{name}-%{1}-modules = %{evr}				\
+Provides:	grub2 = %{evr}					\
+Obsoletes:	grub2 < %{evr}					\
+Requires:	grub2-common = %{evr}					\
+Requires:	grub2-tools-minimal = %{evr}				\
+Requires:	grub2-%{1}-modules = %{evr}				\
 Requires:	gettext which file					\
-Requires:	%{name}-tools = %{evr}					\
+Requires:	grub2-tools = %{evr}					\
 Requires(pre):	dracut							\
 Requires(post): dracut							\
 %{expand:%%description %%{1}}						\
@@ -280,7 +282,7 @@ This subpackage provides support for %{1} systems.			\
 %%package %%{1}-modules							\
 Summary:	Modules used to build custom grub images		\
 BuildArch:	noarch							\
-Requires:	%%{name}-common = %%{evr}				\
+Requires:	grub2-common = %%{evr}				\
 %%description %%{1}-modules						\
 %%{desc}								\
 This subpackage provides support for rebuilding your own grub.efi.	\
@@ -291,8 +293,8 @@ This subpackage provides support for rebuilding your own grub.efi.	\
 %{expand:%%package %%{1}-tools}						\
 Summary:	Support tools for GRUB.					\
 Requires:	gettext os-prober which file system-logos		\
-Requires:	%{name}-common = %{evr}					\
-Requires:	%{name}-tools-minimal = %{evr}				\
+Requires:	grub2-common = %{evr}					\
+Requires:	grub2-tools-minimal = %{evr}				\
 Requires:	os-prober >= 1.58-11					\
 Requires:	gettext which file					\
 									\
@@ -305,12 +307,12 @@ This subpackage provides tools for support of %%{1} platforms.		\
 %{expand:%%package %{1}}						\
 Summary:	GRUB for EFI systems.					\
 Requires:	efi-filesystem						\
-Requires:	%{name}-common = %{evr}					\
-Requires:	%{name}-tools-minimal >= %{evr}				\
-Requires:	%{name}-tools = %{evr}					\
-Provides:	%{name}-efi = %{evr}					\
-%{?legacy_provides:Provides:	%{name} = %{evr}}			\
-%{-o:Obsoletes:	%{name}-efi < %{evr}}					\
+Requires:	grub2-common = %{evr}					\
+Requires:	grub2-tools-minimal >= %{evr}				\
+Requires:	grub2-tools = %{evr}					\
+Provides:	grub2-efi = %{evr}					\
+%{?legacy_provides:Provides:	grub2 = %{evr}}			\
+%{-o:Obsoletes:	grub2-efi < %{evr}}					\
 									\
 %{expand:%%description %{1}}						\
 %{desc}									\
@@ -321,9 +323,9 @@ This subpackage provides support for %{1} systems.			\
 %{expand:%%package %{1}-modules}					\
 Summary:	Modules used to build custom grub.efi images		\
 BuildArch:	noarch							\
-Requires:	%{name}-common = %{evr}					\
-Provides:	%{name}-efi-modules = %{evr}				\
-Obsoletes:	%{name}-efi-modules < %{evr}				\
+Requires:	grub2-common = %{evr}					\
+Provides:	grub2-efi-modules = %{evr}				\
+Obsoletes:	grub2-efi-modules < %{evr}				\
 %{expand:%%description %{1}-modules}					\
 %{desc}									\
 This subpackage provides support for rebuilding your own grub.efi.	\
@@ -331,8 +333,8 @@ This subpackage provides support for rebuilding your own grub.efi.	\
 									\
 %{expand:%%package %{1}-cdboot}						\
 Summary:	Files used to boot removeable media with EFI		\
-Requires:	%{name}-common = %{evr}					\
-Provides:	%{name}-efi-cdboot = %{evr}				\
+Requires:	grub2-common = %{evr}					\
+Provides:	grub2-efi-cdboot = %{evr}				\
 %{expand:%%description %{1}-cdboot}					\
 %{desc}									\
 This subpackage provides optional components of grub used with removeable media on %{1} systems.\
@@ -352,7 +354,7 @@ git init							\
 echo '![[:digit:]][[:digit:]]_*.in' > util/grub.d/.gitignore	\
 echo '!*.[[:digit:]]' > util/.gitignore				\
 echo '!config.h' > include/grub/emu/.gitignore			\
-git config user.email "%{name}-owner@fedoraproject.org"		\
+git config user.email "grub2-owner@fedoraproject.org"		\
 git config user.name "Fedora Ninjas"				\
 git config gc.auto 0						\
 rm -f configure							\
@@ -376,8 +378,8 @@ git am --whitespace=nowarn %%{patches} </dev/null		\
 	--with-platform=efi					\\\
 	--with-utils=host					\\\
 	--target=%{1}						\\\
-	--with-grubdir=%{name}					\\\
-	--program-transform-name=s,grub,%{name},		\\\
+	--with-grubdir=grub2					\\\
+	--program-transform-name=s,grub,grub2,		\\\
 	--disable-werror || ( cat config.log ; exit 1 )		\
 git add .							\
 git commit -m "After efi configure"				\
@@ -483,8 +485,8 @@ cd grub-%{1}-%{tarversion}					\
 	--with-platform=%{platform}				\\\
 	--with-utils=host					\\\
 	--target=%{_target_platform}				\\\
-	--with-grubdir=%{name}					\\\
-	--program-transform-name=s,grub,%{name},		\\\
+	--with-grubdir=grub2					\\\
+	--program-transform-name=s,grub,grub2,		\\\
 	--disable-werror || ( cat config.log ; exit 1 )		\
 git add .							\
 git commit -m "After legacy configure"				\
@@ -500,8 +502,8 @@ cd grub-emu-%{tarversion}					\
 	HOST_CPPFLAGS="-I$(pwd)"				\\\
 	HOST_LDFLAGS="%{legacy_host_ldflags}"			\\\
 	--with-platform=emu					\\\
-	--with-grubdir=%{name}					\\\
-	--program-transform-name=s,grub,%{name},		\\\
+	--with-grubdir=grub2					\\\
+	--program-transform-name=s,grub,grub2,		\\\
 	--disable-werror || ( cat config.log ; exit 1 )		\
 git add .							\
 git commit -m "After emu configure"				\
@@ -527,7 +529,7 @@ find . '(' -iname gdb_grub					\\\
 find $RPM_BUILD_ROOT -type f -iname "*.mod*" -exec chmod a-x {} '\;'	\
 install -m 700 %{2} $RPM_BUILD_ROOT%{efi_esp_dir}/%{2}	\
 install -m 700 %{3} $RPM_BUILD_ROOT%{efi_esp_dir}/%{3} \
-%{expand:%%do_install_protected_file %{name}-%{alt_package_arch}} \
+%{expand:%%do_install_protected_file grub2-%{alt_package_arch}} \
 cd ..								\
 %{nil}
 
@@ -541,8 +543,8 @@ if [ -f $RPM_BUILD_ROOT%{_infodir}/grub-dev.info ]; then	\
 	rm -f $RPM_BUILD_ROOT%{_infodir}/grub-dev.info		\
 fi								\
 find $RPM_BUILD_ROOT -iname "*.module" -exec chmod a-x {} '\;'	\
-ln -s ../boot/%{name}/grub.cfg					\\\
-	$RPM_BUILD_ROOT%{_sysconfdir}/%{name}-efi.cfg		\
+ln -s ../boot/grub2/grub.cfg					\\\
+	$RPM_BUILD_ROOT%{_sysconfdir}/grub2-efi.cfg		\
 install -m 700 %{2} $RPM_BUILD_ROOT%{efi_esp_dir}/%{2}		\
 install -m 700 %{3} $RPM_BUILD_ROOT%{efi_esp_dir}/%{3}		\
 %ifarch %{arm}							\
@@ -550,9 +552,9 @@ install -D -m 700 %{2} $RPM_BUILD_ROOT%{efi_esp_boot}/BOOTARM.EFI \
 %endif								\
 install -D -m 700 unicode.pf2					\\\
 	$RPM_BUILD_ROOT%{efi_esp_dir}/fonts/unicode.pf2		\
-${RPM_BUILD_ROOT}/%{_bindir}/%{name}-editenv			\\\
-		${RPM_BUILD_ROOT}/boot/%{name}/grubenv create	\
-%{expand:%%do_install_protected_file %{name}-%{package_arch}}	\
+${RPM_BUILD_ROOT}/%{_bindir}/grub2-editenv			\\\
+		${RPM_BUILD_ROOT}/boot/grub2/grubenv create	\
+%{expand:%%do_install_protected_file grub2-%{package_arch}}	\
 cd ..								\
 %{nil}
 
@@ -570,10 +572,10 @@ if [ -f $RPM_BUILD_ROOT/%{_libdir}/grub/%{1}/grub2.chrp ]; then \
 	   $RPM_BUILD_ROOT/%{_libdir}/grub/%{1}/grub.chrp	\
 fi								\
 if [ %{3} -eq 0 ]; then						\
-	${RPM_BUILD_ROOT}/%{_bindir}/%{name}-editenv		\\\
-		${RPM_BUILD_ROOT}/boot/%{name}/grubenv create	\
+	${RPM_BUILD_ROOT}/%{_bindir}/grub2-editenv		\\\
+		${RPM_BUILD_ROOT}/boot/grub2/grubenv create	\
 fi								\
-%{expand:%%do_install_protected_file %{name}-%{legacy_package_arch}} \
+%{expand:%%do_install_protected_file grub2-%{legacy_package_arch}} \
 cd ..								\
 %{nil}
 
@@ -600,30 +602,30 @@ install -d -m 0755 						\\\
 	$RPM_BUILD_ROOT%{_infodir}/				\
 cp -a $RPM_BUILD_ROOT%{_datarootdir}/locale/en\@quot		\\\
 	$RPM_BUILD_ROOT%{_datarootdir}/locale/en		\
-cp docs/grub.info $RPM_BUILD_ROOT%{_infodir}/%{name}.info	\
+cp docs/grub.info $RPM_BUILD_ROOT%{_infodir}/grub2.info	\
 cp docs/grub-dev.info						\\\
-	$RPM_BUILD_ROOT%{_infodir}/%{name}-dev.info		\
+	$RPM_BUILD_ROOT%{_infodir}/grub2-dev.info		\
 install -d -m 0700 ${RPM_BUILD_ROOT}%{efi_esp_dir}/		\
 install -d -m 0700 ${RPM_BUILD_ROOT}/boot/grub2/		\
 install -d -m 0700 ${RPM_BUILD_ROOT}/boot/loader/entries	\
-install -d -m 0700 ${RPM_BUILD_ROOT}/boot/%{name}/themes/system	\
+install -d -m 0700 ${RPM_BUILD_ROOT}/boot/grub2/themes/system	\
 install -d -m 0700 ${RPM_BUILD_ROOT}%{_sysconfdir}/default	\
 install -d -m 0700 ${RPM_BUILD_ROOT}%{_sysconfdir}/sysconfig	\
 touch ${RPM_BUILD_ROOT}%{_sysconfdir}/default/grub		\
 ln -sf ../default/grub						\\\
 	${RPM_BUILD_ROOT}%{_sysconfdir}/sysconfig/grub		\
-touch ${RPM_BUILD_ROOT}/boot/%{name}/grub.cfg			\
-ln -s ../boot/%{name}/grub.cfg					\\\
+touch ${RPM_BUILD_ROOT}/boot/grub2/grub.cfg			\
+ln -s ../boot/grub2/grub.cfg					\\\
 	${RPM_BUILD_ROOT}%{_sysconfdir}/grub2.cfg		\
 %{nil}
 
 %define define_legacy_variant_files()				\
 %{expand:%%files %{1}}						\
 %defattr(-,root,root,-)						\
-%config(noreplace) %{_sysconfdir}/%{name}.cfg			\
-%ghost %config(noreplace) /boot/%{name}/grub.cfg		\
+%config(noreplace) %{_sysconfdir}/grub2.cfg			\
+%ghost %config(noreplace) /boot/grub2/grub.cfg		\
 %dir %attr(0700,root,root)/boot/loader/entries			\
-%attr(0644,root,root) %config(noreplace) /etc/dnf/protected.d/%{name}-%{1}.conf \
+%attr(0644,root,root) %config(noreplace) /etc/dnf/protected.d/grub2-%{1}.conf \
 								\
 %{expand:%if 0%{?with_legacy_modules}				\
 %{expand:%%files %{1}-modules}					\
@@ -641,18 +643,18 @@ ln -s ../boot/%{name}/grub.cfg					\\\
 %define define_efi_variant_files()				\
 %{expand:%%files %{1}}						\
 %defattr(0700,root,root,-)					\
-%config(noreplace) %{_sysconfdir}/%{name}.cfg			\
-%config(noreplace) %{_sysconfdir}/%{name}-efi.cfg		\
+%config(noreplace) %{_sysconfdir}/grub2.cfg			\
+%config(noreplace) %{_sysconfdir}/grub2-efi.cfg		\
 %attr(0700,root,root)%{efi_esp_dir}/%{2}			\
 %ifarch %{arm}							\
 %attr(0700,root,root)%{efi_esp_boot}/BOOTARM.EFI		\
 %endif								\
 %dir %attr(0700,root,root)%{efi_esp_dir}/fonts			\
 %dir %attr(0700,root,root)/boot/loader/entries			\
-%ghost %config(noreplace) /boot/%{name}/grub.cfg		\
+%ghost %config(noreplace) /boot/grub2/grub.cfg		\
 %ghost %config(noreplace) %attr(0700,root,root)%{efi_esp_dir}/grub.cfg	\
 %config(noreplace) %verify(not size mode md5 mtime) /boot/grub2/grubenv	\
-%attr(0644,root,root) %config(noreplace) /etc/dnf/protected.d/%{name}-%{1}.conf \
+%attr(0644,root,root) %config(noreplace) /etc/dnf/protected.d/grub2-%{1}.conf \
 %{expand:%if 0%{?without_efi_modules}				\
 %exclude %{_libdir}/grub/%{6}					\
 %exclude %{_libdir}/grub/%{6}/*					\
@@ -745,34 +747,44 @@ Patch0215: 0215-efi-Print-an-error-if-boot-to-firmware-setup-is-not-.patch
 # non-Fedora patches
 Patch1000: 1000-templates-linux_xen-fix-detecting-xsm-policy.patch
 
-
-BuildRequires:	gcc efi-srpm-macros
-BuildRequires:	flex bison binutils python3
-BuildRequires:	ncurses-devel xz-devel bzip2-devel
-BuildRequires:	freetype-devel libusb-devel
+BuildRequires:	autoconf
+BuildRequires:	automake
+BuildRequires:	bison
+BuildRequires:	bzip2-devel
+BuildRequires:	device-mapper-devel
+BuildRequires:	flex
+BuildRequires:	freetype-devel
 BuildRequires:	fuse-devel
-BuildRequires:	rpm-devel rpm-libs
-BuildRequires:	autoconf automake device-mapper-devel
-BuildRequires:	freetype-devel gettext-devel git
-BuildRequires:	texinfo
-BuildRequires:	dejavu-sans-fonts
+BuildRequires:	gcc
+BuildRequires:	gettext-devel
+BuildRequires:	git
 BuildRequires:	help2man
+BuildRequires:	ncurses-devel
+BuildRequires:	python3
+BuildRequires:	rpm-devel
+BuildRequires:	rpm-libs
+BuildRequires:	squashfs-tools
+BuildRequires:	texinfo
+BuildRequires:	xz-devel
+
 # For %%_userunitdir macro
 BuildRequires:	systemd
+
 %ifarch %{efi_arch}
 BuildRequires:	pesign >= 0.99-8
 %endif
+
 %if %{?_with_ccache: 1}%{?!_with_ccache: 0}
 BuildRequires:	ccache
 %endif
 
-ExcludeArch:	s390 s390x
-Obsoletes:	%{name} <= %{evr}
+ExcludeArch:	s390 s390x %{ix86}
+Obsoletes:	grub2 <= %{evr}
 
 %if 0%{with_legacy_arch}
-Requires:	%{name}-%{legacy_package_arch} = %{evr}
+Requires:	grub2-%{legacy_package_arch} = %{evr}
 %else
-Requires:	%{name}-%{package_arch} = %{evr}
+Requires:	grub2-%{package_arch} = %{evr}
 %endif
 
 %global desc \
@@ -789,7 +801,9 @@ hardware devices.\
 Summary:	grub2 common layout
 BuildArch:	noarch
 Conflicts:	grubby < 8.40-18
-Requires(post): util-linux
+Requires(posttrans): util-linux-core
+Requires(posttrans): coreutils
+Requires(posttrans): grep
 
 %description common
 This package provides some directories which are required by various grub2
@@ -797,11 +811,13 @@ subpackages.
 
 %package tools
 Summary:	Support tools for GRUB.
-Obsoletes:	%{name}-tools < %{evr}
-Requires:	%{name}-common = %{epoch}:%{version}-%{release}
-Requires:	gettext os-prober which file
+Obsoletes:	grub2-tools < %{evr}
+Requires:	grub2-common = %{epoch}:%{version}-%{release}
+Requires:	gettext-runtime os-prober file
 Requires(pre):	dracut
 Requires(post):	dracut
+Requires(pre):	grep
+Requires(pre):	sed
 
 %description tools
 %{desc}
@@ -810,9 +826,9 @@ This subpackage provides tools for support of all platforms.
 %ifarch x86_64
 %package tools-efi
 Summary:	Support tools for GRUB.
-Requires:	gettext os-prober which file
-Requires:	%{name}-common = %{epoch}:%{version}-%{release}
-Obsoletes:	%{name}-tools < %{evr}
+Requires:	gettext-runtime os-prober file
+Requires:	grub2-common = %{epoch}:%{version}-%{release}
+Obsoletes:	grub2-tools < %{evr}
 
 %description tools-efi
 %{desc}
@@ -821,9 +837,9 @@ This subpackage provides tools for support of EFI platforms.
 
 %package tools-minimal
 Summary:	Support tools for GRUB.
-Requires:	gettext
-Requires:	%{name}-common = %{epoch}:%{version}-%{release}
-Obsoletes:	%{name}-tools < %{evr}
+Requires:	gettext-runtime
+Requires:	grub2-common = %{epoch}:%{version}-%{release}
+Obsoletes:	grub2-tools < %{evr}
 
 %description tools-minimal
 %{desc}
@@ -831,10 +847,10 @@ This subpackage provides tools for support of all platforms.
 
 %package tools-extra
 Summary:	Support tools for GRUB.
-Requires:	gettext os-prober which file
-Requires:	%{name}-tools-minimal = %{epoch}:%{version}-%{release}
-Requires:	%{name}-common = %{epoch}:%{version}-%{release}
-Obsoletes:	%{name}-tools < %{evr}
+Requires:	gettext-runtime os-prober file
+Requires:	grub2-tools-minimal = %{epoch}:%{version}-%{release}
+Requires:	grub2-common = %{epoch}:%{version}-%{release}
+Obsoletes:	grub2-tools < %{evr}
 
 %description tools-extra
 %{desc}
@@ -853,7 +869,7 @@ This subpackage provides tools for support of all platforms.
 %if 0%{with_emu_arch}
 %package emu
 Summary:	GRUB user-space emulation.
-Requires:	%{name}-tools-minimal = %{epoch}:%{version}-%{release}
+Requires:	grub2-tools-minimal = %{epoch}:%{version}-%{release}
 
 %description emu
 %{desc}
@@ -861,7 +877,7 @@ This subpackage provides the GRUB user-space emulation support of all platforms.
 
 %package emu-modules
 Summary:	GRUB user-space emulation modules.
-Requires:	%{name}-tools-minimal = %{epoch}:%{version}-%{release}
+Requires:	grub2-tools-minimal = %{epoch}:%{version}-%{release}
 
 %description emu-modules
 %{desc}
@@ -911,6 +927,9 @@ git commit -m "After making subdirs"
 %if 0%{with_emu_arch}
 %{expand:%do_emu_build}
 %endif
+%ifarch ppc64le
+%{expand:%do_ieee1275_build_images %%{grublegacyarch} %{grubelfname} %{sb_cer} %{sb_key}}
+%endif
 makeinfo --info --no-split -I docs -o docs/grub-dev.info \
 	docs/grub-dev.texi
 makeinfo --info --no-split -I docs -o docs/grub.info \
@@ -938,14 +957,14 @@ rm -fr $RPM_BUILD_ROOT
 %{expand:%do_emu_install %%{package_arch}}
 %endif
 rm -f $RPM_BUILD_ROOT%{_infodir}/dir
-ln -s %{name}-set-password ${RPM_BUILD_ROOT}/%{_sbindir}/%{name}-setpassword
-echo '.so man8/%{name}-set-password.8' > ${RPM_BUILD_ROOT}/%{_datadir}/man/man8/%{name}-setpassword.8
+ln -s grub2-set-password ${RPM_BUILD_ROOT}/%{_sbindir}/grub2-setpassword
+echo '.so man8/grub2-set-password.8' > ${RPM_BUILD_ROOT}/%{_datadir}/man/man8/grub2-setpassword.8
 %ifnarch x86_64
-rm -vf ${RPM_BUILD_ROOT}/%{_bindir}/%{name}-render-label
-rm -vf ${RPM_BUILD_ROOT}/%{_sbindir}/%{name}-bios-setup
-rm -vf ${RPM_BUILD_ROOT}/%{_sbindir}/%{name}-macbless
+rm -vf ${RPM_BUILD_ROOT}/%{_bindir}/grub2-render-label
+rm -vf ${RPM_BUILD_ROOT}/%{_sbindir}/grub2-bios-setup
+rm -vf ${RPM_BUILD_ROOT}/%{_sbindir}/grub2-macbless
 %endif
-%{expand:%%do_install_protected_file %{name}-tools-minimal}
+%{expand:%%do_install_protected_file grub2-tools-minimal}
 
 %find_lang grub
 
@@ -979,7 +998,7 @@ install -d -m 0755 %{buildroot}%{_unitdir}/system-update.target.wants
 install -d -m 0755 %{buildroot}%{_unitdir}/reboot.target.wants
 ln -s ../grub-boot-indeterminate.service \
 	%{buildroot}%{_unitdir}/system-update.target.wants
-ln -s ../%{name}-systemd-integration.service \
+ln -s ../grub2-systemd-integration.service \
 	%{buildroot}%{_unitdir}/reboot.target.wants
 
 # Don't run debuginfo on all the grub modules and whatnot; it just
@@ -1004,9 +1023,9 @@ ln -s ../%{name}-systemd-integration.service \
 %undefine buildsubdir
 
 %pre tools
-if [ -f /boot/%{name}/user.cfg ]; then
-    if grep -q '^GRUB_PASSWORD=' /boot/%{name}/user.cfg ; then
-	sed -i 's/^GRUB_PASSWORD=/GRUB2_PASSWORD=/' /boot/%{name}/user.cfg
+if [ -f /boot/grub2/user.cfg ]; then
+    if grep -q '^GRUB_PASSWORD=' /boot/grub2/user.cfg ; then
+	sed -i 's/^GRUB_PASSWORD=/GRUB2_PASSWORD=/' /boot/grub2/user.cfg
     fi
 elif [ -f %{efi_esp_dir}/user.cfg ]; then
     if grep -q '^GRUB_PASSWORD=' %{efi_esp_dir}/user.cfg ; then
@@ -1022,12 +1041,12 @@ elif [ -f /etc/grub.d/01_users ] && \
 		sed 's/^password_pbkdf2 root \(.*\)$/GRUB2_PASSWORD=\1/' \
 	    > %{efi_esp_dir}/user.cfg
     fi
-    if [ -f /boot/%{name}/grub.cfg ]; then
-	install -m 0600 /dev/null /boot/%{name}/user.cfg
-	chmod 0600 /boot/%{name}/user.cfg
+    if [ -f /boot/grub2/grub.cfg ]; then
+	install -m 0600 /dev/null /boot/grub2/user.cfg
+	chmod 0600 /boot/grub2/user.cfg
 	grep '^password_pbkdf2 root' /etc/grub.d/01_users | \
 		sed 's/^password_pbkdf2 root \(.*\)$/GRUB2_PASSWORD=\1/' \
-	    > /boot/%{name}/user.cfg
+	    > /boot/grub2/user.cfg
     fi
 fi
 
@@ -1060,7 +1079,7 @@ rm -r /boot/grub2.tmp/ || :
 set -eu
 
 EFI_HOME=%{efi_esp_dir}
-GRUB_HOME=/boot/%{name}
+GRUB_HOME=/boot/grub2
 ESP_PATH=/boot/efi
 
 if ! mountpoint -q ${ESP_PATH}; then
@@ -1077,8 +1096,8 @@ if grep -q "configfile" ${EFI_HOME}/grub.cfg; then
 fi
 
 # create a stub grub2 config in EFI
-BOOT_UUID=$(%{name}-probe --target=fs_uuid ${GRUB_HOME})
-GRUB_DIR=$(%{name}-mkrelpath ${GRUB_HOME})
+BOOT_UUID=$(grub2-probe --target=fs_uuid ${GRUB_HOME})
+GRUB_DIR=$(grub2-mkrelpath ${GRUB_HOME})
 
 cat << EOF > ${EFI_HOME}/grub.cfg.stb
 search --no-floppy --fs-uuid --set=dev ${BOOT_UUID}
@@ -1104,14 +1123,14 @@ mv ${EFI_HOME}/grub.cfg.stb ${EFI_HOME}/grub.cfg
 %{_prefix}/lib/kernel/install.d/99-grub-mkconfig.install
 %dir %{_datarootdir}/grub
 %exclude %{_datarootdir}/grub/*
-%dir /boot/%{name}
-%dir /boot/%{name}/themes/
-%dir /boot/%{name}/themes/system
-%attr(0700,root,root) %dir /boot/%{name}
-%exclude /boot/%{name}/*
+%dir /boot/grub2
+%dir /boot/grub2/themes/
+%dir /boot/grub2/themes/system
+%attr(0700,root,root) %dir /boot/grub2
+%exclude /boot/grub2/*
 %dir %attr(0700,root,root) %{efi_esp_dir}
 %exclude %{efi_esp_dir}/*
-%ghost %config(noreplace) %verify(not size mode md5 mtime) /boot/%{name}/grubenv
+%ghost %config(noreplace) %verify(not size mode md5 mtime) /boot/grub2/grubenv
 %license COPYING
 %doc THANKS
 %doc docs/grub.html
@@ -1120,30 +1139,30 @@ mv ${EFI_HOME}/grub.cfg.stb ${EFI_HOME}/grub.cfg
 
 %files tools-minimal
 %{_sysconfdir}/prelink.conf.d/grub2.conf
-%{_sbindir}/%{name}-get-kernel-settings
-%{_sbindir}/%{name}-probe
-%attr(4755, root, root) %{_sbindir}/%{name}-set-bootflag
-%{_sbindir}/%{name}-set-default
-%{_sbindir}/%{name}-set*password
-%{_bindir}/%{name}-editenv
-%{_bindir}/%{name}-mkpasswd-pbkdf2
-%{_bindir}/%{name}-mount
-%attr(0644,root,root) %config(noreplace) /etc/dnf/protected.d/%{name}-tools-minimal.conf
+%{_sbindir}/grub2-get-kernel-settings
+%{_sbindir}/grub2-probe
+%attr(4755, root, root) %{_sbindir}/grub2-set-bootflag
+%{_sbindir}/grub2-set-default
+%{_sbindir}/grub2-set*password
+%{_bindir}/grub2-editenv
+%{_bindir}/grub2-mkpasswd-pbkdf2
+%{_bindir}/grub2-mount
+%attr(0644,root,root) %config(noreplace) /etc/dnf/protected.d/grub2-tools-minimal.conf
 
-%{_datadir}/man/man3/%{name}-get-kernel-settings*
-%{_datadir}/man/man8/%{name}-set-default*
-%{_datadir}/man/man8/%{name}-set*password*
-%{_datadir}/man/man1/%{name}-editenv*
-%{_datadir}/man/man1/%{name}-mkpasswd-*
+%{_datadir}/man/man3/grub2-get-kernel-settings*
+%{_datadir}/man/man8/grub2-set-default*
+%{_datadir}/man/man8/grub2-set*password*
+%{_datadir}/man/man1/grub2-editenv*
+%{_datadir}/man/man1/grub2-mkpasswd-*
 
 %ifarch x86_64
 %files tools-efi
-%{_bindir}/%{name}-glue-efi
-%{_bindir}/%{name}-render-label
-%{_sbindir}/%{name}-macbless
-%{_datadir}/man/man1/%{name}-glue-efi*
-%{_datadir}/man/man1/%{name}-render-label*
-%{_datadir}/man/man8/%{name}-macbless*
+%{_bindir}/grub2-glue-efi
+%{_bindir}/grub2-render-label
+%{_sbindir}/grub2-macbless
+%{_datadir}/man/man1/grub2-glue-efi*
+%{_datadir}/man/man1/grub2-render-label*
+%{_datadir}/man/man8/grub2-macbless*
 %endif
 
 %files tools
@@ -1155,96 +1174,96 @@ mv ${EFI_HOME}/grub.cfg.stb ${EFI_HOME}/grub.cfg
 %{_userunitdir}/timers.target.wants
 %{_unitdir}/grub-boot-indeterminate.service
 %{_unitdir}/system-update.target.wants
-%{_unitdir}/%{name}-systemd-integration.service
+%{_unitdir}/grub2-systemd-integration.service
 %{_unitdir}/reboot.target.wants
 %{_unitdir}/systemd-logind.service.d
-%{_infodir}/%{name}*
+%{_infodir}/grub2*
 %{_datarootdir}/grub/*
-%{_sbindir}/%{name}-install
+%{_sbindir}/grub2-install
 %exclude %{_datarootdir}/grub/themes
 %exclude %{_datarootdir}/grub/*.h
 %{_datarootdir}/bash-completion/completions/grub
-%{_sbindir}/%{name}-mkconfig
-%{_sbindir}/%{name}-reboot
-%{_bindir}/%{name}-file
-%{_bindir}/%{name}-menulst2cfg
-%{_bindir}/%{name}-mkimage
-%{_bindir}/%{name}-mkrelpath
-%{_bindir}/%{name}-script-check
-%{_libexecdir}/%{name}
+%{_sbindir}/grub2-mkconfig
+%{_sbindir}/grub2-reboot
+%{_bindir}/grub2-file
+%{_bindir}/grub2-menulst2cfg
+%{_bindir}/grub2-mkimage
+%{_bindir}/grub2-mkrelpath
+%{_bindir}/grub2-script-check
+%{_libexecdir}/grub2
 %{_datadir}/man/man?/*
 
 # exclude man pages from tools-extra
-%exclude %{_datadir}/man/man8/%{name}-sparc64-setup*
-%exclude %{_datadir}/man/man1/%{name}-fstest*
-%exclude %{_datadir}/man/man1/%{name}-glue-efi*
-%exclude %{_datadir}/man/man1/%{name}-kbdcomp*
-%exclude %{_datadir}/man/man1/%{name}-mkfont*
-%exclude %{_datadir}/man/man1/%{name}-mklayout*
-%exclude %{_datadir}/man/man1/%{name}-mknetdir*
-%exclude %{_datadir}/man/man1/%{name}-mkrescue*
-%exclude %{_datadir}/man/man1/%{name}-mkstandalone*
-%exclude %{_datadir}/man/man1/%{name}-syslinux2cfg*
+%exclude %{_datadir}/man/man8/grub2-sparc64-setup*
+%exclude %{_datadir}/man/man1/grub2-fstest*
+%exclude %{_datadir}/man/man1/grub2-glue-efi*
+%exclude %{_datadir}/man/man1/grub2-kbdcomp*
+%exclude %{_datadir}/man/man1/grub2-mkfont*
+%exclude %{_datadir}/man/man1/grub2-mklayout*
+%exclude %{_datadir}/man/man1/grub2-mknetdir*
+%exclude %{_datadir}/man/man1/grub2-mkrescue*
+%exclude %{_datadir}/man/man1/grub2-mkstandalone*
+%exclude %{_datadir}/man/man1/grub2-syslinux2cfg*
 
 # exclude man pages from tools-minimal
-%exclude %{_datadir}/man/man3/%{name}-get-kernel-settings*
-%exclude %{_datadir}/man/man8/%{name}-set-default*
-%exclude %{_datadir}/man/man8/%{name}-set*password*
-%exclude %{_datadir}/man/man1/%{name}-editenv*
-%exclude %{_datadir}/man/man1/%{name}-mkpasswd-*
-%exclude %{_datadir}/man/man8/%{name}-macbless*
-%exclude %{_datadir}/man/man1/%{name}-render-label*
+%exclude %{_datadir}/man/man3/grub2-get-kernel-settings*
+%exclude %{_datadir}/man/man8/grub2-set-default*
+%exclude %{_datadir}/man/man8/grub2-set*password*
+%exclude %{_datadir}/man/man1/grub2-editenv*
+%exclude %{_datadir}/man/man1/grub2-mkpasswd-*
+%exclude %{_datadir}/man/man8/grub2-macbless*
+%exclude %{_datadir}/man/man1/grub2-render-label*
 
 %if %{with_legacy_arch}
-%{_sbindir}/%{name}-install
+%{_sbindir}/grub2-install
 %ifarch x86_64
-%{_sbindir}/%{name}-bios-setup
+%{_sbindir}/grub2-bios-setup
 %else
-%exclude %{_sbindir}/%{name}-bios-setup
-%exclude %{_datadir}/man/man8/%{name}-bios-setup*
+%exclude %{_sbindir}/grub2-bios-setup
+%exclude %{_datadir}/man/man8/grub2-bios-setup*
 %endif
 %ifarch %{sparc}
-%{_sbindir}/%{name}-sparc64-setup
+%{_sbindir}/grub2-sparc64-setup
 %else
-%exclude %{_sbindir}/%{name}-sparc64-setup
-%exclude %{_datadir}/man/man8/%{name}-sparc64-setup*
+%exclude %{_sbindir}/grub2-sparc64-setup
+%exclude %{_datadir}/man/man8/grub2-sparc64-setup*
 %endif
 %ifarch %{sparc} ppc ppc64 ppc64le
-%{_sbindir}/%{name}-ofpathname
+%{_sbindir}/grub2-ofpathname
 %else
-%exclude %{_sbindir}/%{name}-ofpathname
-%exclude %{_datadir}/man/man8/%{name}-ofpathname*
+%exclude %{_sbindir}/grub2-ofpathname
+%exclude %{_datadir}/man/man8/grub2-ofpathname*
 %endif
 %endif
 
 %files tools-extra
-%{_bindir}/%{name}-fstest
-%{_bindir}/%{name}-kbdcomp
-%{_bindir}/%{name}-mkfont
-%{_bindir}/%{name}-mklayout
-%{_bindir}/%{name}-mknetdir
+%{_bindir}/grub2-fstest
+%{_bindir}/grub2-kbdcomp
+%{_bindir}/grub2-mkfont
+%{_bindir}/grub2-mklayout
+%{_bindir}/grub2-mknetdir
 %ifnarch %{sparc}
-%{_bindir}/%{name}-mkrescue
-%{_datadir}/man/man1/%{name}-mkrescue*
+%{_bindir}/grub2-mkrescue
+%{_datadir}/man/man1/grub2-mkrescue*
 %else
-%exclude %{_datadir}/man/man1/%{name}-mkrescue*
+%exclude %{_datadir}/man/man1/grub2-mkrescue*
 %endif
-%{_bindir}/%{name}-mkstandalone
-%{_bindir}/%{name}-syslinux2cfg
+%{_bindir}/grub2-mkstandalone
+%{_bindir}/grub2-syslinux2cfg
 %{_sysconfdir}/sysconfig/grub
-%{_datadir}/man/man1/%{name}-fstest*
-%{_datadir}/man/man1/%{name}-kbdcomp*
-%{_datadir}/man/man1/%{name}-mkfont*
-%{_datadir}/man/man1/%{name}-mklayout*
-%{_datadir}/man/man1/%{name}-mknetdir*
-%{_datadir}/man/man1/%{name}-mkstandalone*
-%{_datadir}/man/man1/%{name}-syslinux2cfg*
-%exclude %{_bindir}/%{name}-glue-efi
-%exclude %{_sbindir}/%{name}-sparc64-setup
-%exclude %{_sbindir}/%{name}-ofpathname
-%exclude %{_datadir}/man/man1/%{name}-glue-efi*
-%exclude %{_datadir}/man/man8/%{name}-ofpathname*
-%exclude %{_datadir}/man/man8/%{name}-sparc64-setup*
+%{_datadir}/man/man1/grub2-fstest*
+%{_datadir}/man/man1/grub2-kbdcomp*
+%{_datadir}/man/man1/grub2-mkfont*
+%{_datadir}/man/man1/grub2-mklayout*
+%{_datadir}/man/man1/grub2-mknetdir*
+%{_datadir}/man/man1/grub2-mkstandalone*
+%{_datadir}/man/man1/grub2-syslinux2cfg*
+%exclude %{_bindir}/grub2-glue-efi
+%exclude %{_sbindir}/grub2-sparc64-setup
+%exclude %{_sbindir}/grub2-ofpathname
+%exclude %{_datadir}/man/man1/grub2-glue-efi*
+%exclude %{_datadir}/man/man8/grub2-ofpathname*
+%exclude %{_datadir}/man/man8/grub2-sparc64-setup*
 %exclude %{_datarootdir}/grub/themes/starfield
 
 %if 0%{with_efi_arch}
@@ -1259,8 +1278,8 @@ mv ${EFI_HOME}/grub.cfg.stb ${EFI_HOME}/grub.cfg
 
 %if 0%{with_emu_arch}
 %files emu
-%{_bindir}/%{name}-emu*
-%{_datadir}/man/man1/%{name}-emu*
+%{_bindir}/grub2-emu*
+%{_datadir}/man/man1/grub2-emu*
 
 %files emu-modules
 %{_libdir}/grub/%{emuarch}-emu/*
