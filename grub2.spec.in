@@ -746,6 +746,7 @@ Patch0215: 0215-efi-Print-an-error-if-boot-to-firmware-setup-is-not-.patch
 
 # non-Fedora patches
 Patch1000: 1000-templates-linux_xen-fix-detecting-xsm-policy.patch
+Patch1001: 1001-Hide-os-prober-disabled-warning.patch
 
 BuildRequires:	autoconf
 BuildRequires:	automake

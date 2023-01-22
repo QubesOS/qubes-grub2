@@ -1,0 +1,32 @@
+From e935c537b538a58a1833d8dade5b2c54891fa68d Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Marek=20Marczykowski-G=C3=B3recki?=
+ <marmarek@invisiblethingslab.com>
+Date: Sun, 22 Jan 2023 15:11:23 +0100
+Subject: [PATCH] Hide "os-prober disabled" warning
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+It is disabled very much intentional, to not parse arbitrary partition
+on the disk. Do not suggest enabling it.
+
+Signed-off-by: Marek Marczykowski-Górecki <marmarek@invisiblethingslab.com>
+---
+ util/grub.d/30_os-prober.in | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/util/grub.d/30_os-prober.in b/util/grub.d/30_os-prober.in
+index 656301eaf..fec72d453 100644
+--- a/util/grub.d/30_os-prober.in
++++ b/util/grub.d/30_os-prober.in
+@@ -27,7 +27,6 @@ export TEXTDOMAINDIR="@localedir@"
+ . "$pkgdatadir/grub-mkconfig_lib"
+ 
+ if [ "x${GRUB_DISABLE_OS_PROBER}" = "xtrue" ]; then
+-  grub_warn "$(gettext_printf "os-prober will not be executed to detect other bootable partitions.\nSystems on them will not be added to the GRUB boot configuration.\nCheck GRUB_DISABLE_OS_PROBER documentation entry.")"
+   exit 0
+ fi
+ 
+-- 
+2.37.3
+
