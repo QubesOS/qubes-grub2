@@ -801,7 +801,11 @@ hardware devices.\
 Summary:	grub2 common layout
 BuildArch:	noarch
 Conflicts:	grubby < 8.40-18
+%if 0%{?fedora} >= 37
 Requires(posttrans): util-linux-core
+%else
+Requires(posttrans): util-linux
+%endif
 Requires(posttrans): coreutils
 Requires(posttrans): grep
 
