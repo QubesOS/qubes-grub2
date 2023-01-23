@@ -292,10 +292,9 @@ This subpackage provides support for rebuilding your own grub.efi.	\
 %{expand:%%{?!buildsubdir:%%define buildsubdir grub-%%{1}-%{tarversion}}}\
 %{expand:%%package %%{1}-tools}						\
 Summary:	Support tools for GRUB.					\
-Requires:	gettext os-prober which file system-logos		\
+Requires:	gettext which file system-logos		\
 Requires:	grub2-common = %{evr}					\
 Requires:	grub2-tools-minimal = %{evr}				\
-Requires:	os-prober >= 1.58-11					\
 Requires:	gettext which file					\
 									\
 %{expand:%%description %%{1}-tools}					\
@@ -818,7 +817,7 @@ subpackages.
 Summary:	Support tools for GRUB.
 Obsoletes:	grub2-tools < %{evr}
 Requires:	grub2-common = %{epoch}:%{version}-%{release}
-Requires:	gettext-runtime os-prober file
+Requires:	gettext-runtime file
 Requires(pre):	dracut
 Requires(post):	dracut
 Requires(pre):	grep
@@ -831,7 +830,7 @@ This subpackage provides tools for support of all platforms.
 %ifarch x86_64
 %package tools-efi
 Summary:	Support tools for GRUB.
-Requires:	gettext-runtime os-prober file
+Requires:	gettext-runtime file
 Requires:	grub2-common = %{epoch}:%{version}-%{release}
 Obsoletes:	grub2-tools < %{evr}
 
@@ -852,7 +851,7 @@ This subpackage provides tools for support of all platforms.
 
 %package tools-extra
 Summary:	Support tools for GRUB.
-Requires:	gettext-runtime os-prober file
+Requires:	gettext-runtime file
 Requires:	grub2-tools-minimal = %{epoch}:%{version}-%{release}
 Requires:	grub2-common = %{epoch}:%{version}-%{release}
 Obsoletes:	grub2-tools < %{evr}
