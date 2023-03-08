@@ -1,0 +1,96 @@
+From 6933cf0a6011f6c9eb951a2375c204c699b635ee Mon Sep 17 00:00:00 2001
+From: Daniel Kiper <daniel.kiper@oracle.com>
+Date: Wed, 22 Apr 2020 21:41:24 +0200
+Subject: [PATCH 1107/1118] i386/tpm: Rename tpm module to tpm_verifier
+
+...to avoid naming collision with TPM TIS and CRB driver introduced
+by subsequent patch.
+
+Signed-off-by: Daniel Kiper <daniel.kiper@oracle.com>
+---
+ docs/grub.texi                               | 15 ++++++++-------
+ grub-core/Makefile.core.def                  |  4 ++--
+ grub-core/commands/{tpm.c => tpm_verifier.c} |  6 +++---
+ 3 files changed, 13 insertions(+), 12 deletions(-)
+ rename grub-core/commands/{tpm.c => tpm_verifier.c} (96%)
+
+diff --git a/docs/grub.texi b/docs/grub.texi
+index 96c85927ad36..d0525023bbb8 100644
+--- a/docs/grub.texi
++++ b/docs/grub.texi
+@@ -6008,10 +6008,10 @@ grub-mkimage -O x86_64-efi -o grubx64.efi -p '(tftp)/grub' --sbat sbat.csv efine
+ @node Measured Boot
+ @section Measuring boot components
+ 
+-If the tpm module is loaded and the platform has a Trusted Platform Module
+-installed, GRUB will log each command executed and each file loaded into the
+-TPM event log and extend the PCR values in the TPM correspondingly. All events
+-will be logged into the PCR described below with a type of EV_IPL and an
++If the tpm_verifier module is loaded and the platform has a Trusted Platform
++Module installed, GRUB will log each command executed and each file loaded into
++the TPM event log and extend the PCR values in the TPM correspondingly. All
++events will be logged into the PCR described below with a type of EV_IPL and an
+ event description as described below.
+ 
+ @multitable @columnfractions 0.3 0.1 0.6
+@@ -6036,9 +6036,10 @@ corresponding to the filename.
+ 
+ GRUB will not measure its own @file{core.img} - it is expected that firmware
+ will carry this out. GRUB will also not perform any measurements until the
+-tpm module is loaded. As such it is recommended that the tpm module be built
+-into @file{core.img} in order to avoid a potential gap in measurement between
+-@file{core.img} being loaded and the tpm module being loaded.
++tpm_verifier module is loaded. As such it is recommended that the tpm_verifier
++module be built into @file{core.img} in order to avoid a potential gap in
++measurement between @file{core.img} being loaded and the tpm_verifier module
++being loaded.
+ 
+ Measured boot is currently only supported on EFI platforms.
+ 
+diff --git a/grub-core/Makefile.core.def b/grub-core/Makefile.core.def
+index 452a30adab89..e6b41ede92c4 100644
+--- a/grub-core/Makefile.core.def
++++ b/grub-core/Makefile.core.def
+@@ -2505,8 +2505,8 @@ module = {
+ };
+ 
+ module = {
+-  name = tpm;
+-  common = commands/tpm.c;
++  name = tpm_verifier;
++  common = commands/tpm_verifier.c;
+   efi = commands/efi/tpm.c;
+   enable = efi;
+ };
+diff --git a/grub-core/commands/tpm.c b/grub-core/commands/tpm_verifier.c
+similarity index 96%
+rename from grub-core/commands/tpm.c
+rename to grub-core/commands/tpm_verifier.c
+index 2052c36eaba5..1d820a774b3b 100644
+--- a/grub-core/commands/tpm.c
++++ b/grub-core/commands/tpm_verifier.c
+@@ -78,18 +78,18 @@ grub_tpm_verify_string (char *str, enum grub_verify_string_type type)
+ }
+ 
+ struct grub_file_verifier grub_tpm_verifier = {
+-  .name = "tpm",
++  .name = "tpm_verifier",
+   .init = grub_tpm_verify_init,
+   .write = grub_tpm_verify_write,
+   .verify_string = grub_tpm_verify_string,
+ };
+ 
+-GRUB_MOD_INIT (tpm)
++GRUB_MOD_INIT (tpm_verifier)
+ {
+   grub_verifier_register (&grub_tpm_verifier);
+ }
+ 
+-GRUB_MOD_FINI (tpm)
++GRUB_MOD_FINI (tpm_verifier)
+ {
+   grub_verifier_unregister (&grub_tpm_verifier);
+ }
+-- 
+2.17.1
+
