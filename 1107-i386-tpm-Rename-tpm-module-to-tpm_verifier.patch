@@ -1,7 +1,7 @@
-From 6933cf0a6011f6c9eb951a2375c204c699b635ee Mon Sep 17 00:00:00 2001
+From 3b50cdd2ec6f1d94b126c510e8d2f20cc37bfaaa Mon Sep 17 00:00:00 2001
 From: Daniel Kiper <daniel.kiper@oracle.com>
 Date: Wed, 22 Apr 2020 21:41:24 +0200
-Subject: [PATCH 1107/1118] i386/tpm: Rename tpm module to tpm_verifier
+Subject: [PATCH] i386/tpm: Rename tpm module to tpm_verifier
 
 ...to avoid naming collision with TPM TIS and CRB driver introduced
 by subsequent patch.
@@ -15,10 +15,10 @@ Signed-off-by: Daniel Kiper <daniel.kiper@oracle.com>
  rename grub-core/commands/{tpm.c => tpm_verifier.c} (96%)
 
 diff --git a/docs/grub.texi b/docs/grub.texi
-index 96c85927ad36..d0525023bbb8 100644
+index f8b4b3b21a7f..20cf82a813a7 100644
 --- a/docs/grub.texi
 +++ b/docs/grub.texi
-@@ -6008,10 +6008,10 @@ grub-mkimage -O x86_64-efi -o grubx64.efi -p '(tftp)/grub' --sbat sbat.csv efine
+@@ -5991,10 +5991,10 @@ grub-mkimage -O x86_64-efi -o grubx64.efi -p '(tftp)/grub' --sbat sbat.csv efine
  @node Measured Boot
  @section Measuring boot components
  
@@ -33,7 +33,7 @@ index 96c85927ad36..d0525023bbb8 100644
  event description as described below.
  
  @multitable @columnfractions 0.3 0.1 0.6
-@@ -6036,9 +6036,10 @@ corresponding to the filename.
+@@ -6019,9 +6019,10 @@ corresponding to the filename.
  
  GRUB will not measure its own @file{core.img} - it is expected that firmware
  will carry this out. GRUB will also not perform any measurements until the
@@ -48,10 +48,10 @@ index 96c85927ad36..d0525023bbb8 100644
  Measured boot is currently only supported on EFI platforms.
  
 diff --git a/grub-core/Makefile.core.def b/grub-core/Makefile.core.def
-index 452a30adab89..e6b41ede92c4 100644
+index 8022e1c0a794..f482cc01e36e 100644
 --- a/grub-core/Makefile.core.def
 +++ b/grub-core/Makefile.core.def
-@@ -2505,8 +2505,8 @@ module = {
+@@ -2490,8 +2490,8 @@ module = {
  };
  
  module = {

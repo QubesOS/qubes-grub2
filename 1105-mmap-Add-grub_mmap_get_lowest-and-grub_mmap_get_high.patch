@@ -1,8 +1,7 @@
-From 534e9d569caa75c0e36a80134dea6bf0f9350bc7 Mon Sep 17 00:00:00 2001
+From 47c88e17987444c862dd83a5e5aeb2faa6b4afb1 Mon Sep 17 00:00:00 2001
 From: Daniel Kiper <daniel.kiper@oracle.com>
 Date: Mon, 4 May 2020 22:34:59 +0200
-Subject: [PATCH 1106/1118] mmap: Add grub_mmap_get_lowest() and
- grub_mmap_get_highest()
+Subject: [PATCH] mmap: Add grub_mmap_get_lowest() and grub_mmap_get_highest()
 
 The functions calculate lowest and highest available RAM
 addresses respectively.
@@ -12,15 +11,15 @@ Intel TXT secure launcher introduced by subsequent patches.
 
 Signed-off-by: Daniel Kiper <daniel.kiper@oracle.com>
 ---
- grub-core/mmap/mmap.c | 64 +++++++++++++++++++++++++++++++++++++++++++
+ grub-core/mmap/mmap.c | 70 +++++++++++++++++++++++++++++++++++++++++++
  include/grub/memory.h |  3 ++
- 2 files changed, 67 insertions(+)
+ 2 files changed, 73 insertions(+)
 
 diff --git a/grub-core/mmap/mmap.c b/grub-core/mmap/mmap.c
-index c8c8312c56f2..270730fc770f 100644
+index c8c8312c56f2..1e93b7e3cabb 100644
 --- a/grub-core/mmap/mmap.c
 +++ b/grub-core/mmap/mmap.c
-@@ -343,6 +343,70 @@ grub_mmap_unregister (int handle)
+@@ -343,6 +343,76 @@ grub_mmap_unregister (int handle)
  
  #endif /* ! GRUB_MMAP_REGISTER_BY_FIRMWARE */
  
@@ -49,6 +48,8 @@ index c8c8312c56f2..270730fc770f 100644
 +  return 0;
 +}
 +
++/* This function calculates lowest available RAM address that is at or above
++   the passed limit. If no RAM exists above the limit, ~0 is returned. */
 +grub_uint64_t
 +grub_mmap_get_lowest (grub_uint64_t limit)
 +{
@@ -78,6 +79,10 @@ index c8c8312c56f2..270730fc770f 100644
 +  return 0;
 +}
 +
++/* This function calculates highest available RAM address that is below the
++   passed limit. Returned address is either one byte after last byte of RAM or
++   equal to limit, whichever is lower. If no RAM exists below limit, 0 is
++   returned. */
 +grub_uint64_t
 +grub_mmap_get_highest (grub_uint64_t limit)
 +{

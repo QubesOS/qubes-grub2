@@ -1,24 +1,26 @@
-From 32f19a720565b16cea3b7356d7c39d6c1614dcbd Mon Sep 17 00:00:00 2001
+From a01e6982379c8f1850bf3c1877568442bc8d6c76 Mon Sep 17 00:00:00 2001
 From: Ross Philipson <ross.philipson@oracle.com>
 Date: Wed, 7 Aug 2019 15:01:00 -0400
-Subject: [PATCH 1114/1118] i386/slaunch: Add secure launch framework and
- commands
+Subject: [PATCH] i386/slaunch: Add secure launch framework and commands
 
 Signed-off-by: Ross Philipson <ross.philipson@oracle.com>
 Signed-off-by: Daniel Kiper <daniel.kiper@oracle.com>
+Signed-off-by: Krystian Hebel <krystian.hebel@3mdeb.com>
 ---
- grub-core/Makefile.am            |   3 +
- grub-core/Makefile.core.def      |  15 +++
- grub-core/lib/i386/relocator32.S |   8 ++
- grub-core/loader/i386/bsd.c      |   7 +
- grub-core/loader/i386/linux.c    | 213 ++++++++++++++++++++++++++++---
- grub-core/loader/i386/slaunch.c  | 194 ++++++++++++++++++++++++++++
- grub-core/loader/i386/xnu.c      |   3 +
- grub-core/loader/multiboot.c     |   5 +
- include/grub/file.h              |   3 +
- include/grub/i386/linux.h        |  14 +-
- include/grub/i386/slaunch.h      |  57 +++++++++
- 11 files changed, 506 insertions(+), 16 deletions(-)
+ grub-core/Makefile.am                        |   3 +
+ grub-core/Makefile.core.def                  |  15 ++
+ grub-core/lib/i386/relocator32.S             |   8 +
+ grub-core/loader/i386/bsd.c                  |   7 +
+ grub-core/loader/i386/coreboot/chainloader.c |   2 +
+ grub-core/loader/i386/linux.c                | 213 +++++++++++++++++--
+ grub-core/loader/i386/pc/plan9.c             |   3 +-
+ grub-core/loader/i386/slaunch.c              | 201 +++++++++++++++++
+ grub-core/loader/i386/xnu.c                  |   3 +
+ grub-core/loader/multiboot.c                 |   5 +
+ include/grub/file.h                          |   3 +
+ include/grub/i386/linux.h                    |  14 +-
+ include/grub/i386/slaunch.h                  |  57 +++++
+ 13 files changed, 517 insertions(+), 17 deletions(-)
  create mode 100644 grub-core/loader/i386/slaunch.c
  create mode 100644 include/grub/i386/slaunch.h
 
@@ -51,10 +53,10 @@ index ee88e44e97a0..769bf013d47b 100644
  KERNEL_HEADER_FILES += $(top_srcdir)/include/grub/acpi.h
  KERNEL_HEADER_FILES += $(top_srcdir)/include/grub/i386/pmtimer.h
 diff --git a/grub-core/Makefile.core.def b/grub-core/Makefile.core.def
-index e6b41ede92c4..b606496b26ef 100644
+index f482cc01e36e..7ebacaa3cefe 100644
 --- a/grub-core/Makefile.core.def
 +++ b/grub-core/Makefile.core.def
-@@ -1831,6 +1831,15 @@ module = {
+@@ -1816,6 +1816,15 @@ module = {
    enable = noemu;
  };
  
@@ -70,7 +72,7 @@ index e6b41ede92c4..b606496b26ef 100644
  module = {
    name = fdt;
    efi = loader/efi/fdt.c;
-@@ -2504,6 +2513,12 @@ module = {
+@@ -2489,6 +2498,12 @@ module = {
    common = commands/testspeed.c;
  };
  
@@ -153,6 +155,26 @@ index 5f3290ce17bc..328b34635f78 100644
    state.eip = entry;
    state.esp = stack_target;
    state.ebp = stack_target;
+diff --git a/grub-core/loader/i386/coreboot/chainloader.c b/grub-core/loader/i386/coreboot/chainloader.c
+index 0a19ebb9c3e5..dccd86b07bde 100644
+--- a/grub-core/loader/i386/coreboot/chainloader.c
++++ b/grub-core/loader/i386/coreboot/chainloader.c
+@@ -33,6 +33,7 @@
+ #include <grub/lib/LzmaDec.h>
+ #include <grub/efi/pe32.h>
+ #include <grub/i386/cpuid.h>
++#include <grub/i386/slaunch.h>
+ 
+ GRUB_MOD_LICENSE ("GPLv3+");
+ 
+@@ -47,6 +48,7 @@ grub_chain_boot (void)
+   grub_video_set_mode ("text", 0, 0);
+ 
+   state.eip = entry;
++  state.edi = SLP_NONE;
+   return grub_relocator32_boot (relocator, state, 0);
+ }
+ 
 diff --git a/grub-core/loader/i386/linux.c b/grub-core/loader/i386/linux.c
 index 9f74a96b19ae..ba050de2d1df 100644
 --- a/grub-core/loader/i386/linux.c
@@ -524,12 +546,33 @@ index 9f74a96b19ae..ba050de2d1df 100644
    linux_params.code32_start = prot_mode_target + lh.code32_start - GRUB_LINUX_BZIMAGE_ADDR;
    linux_params.kernel_alignment = (1 << align);
    linux_params.ps_mouse = linux_params.padding11 = 0;
+diff --git a/grub-core/loader/i386/pc/plan9.c b/grub-core/loader/i386/pc/plan9.c
+index 37550155df78..cd8213a05d31 100644
+--- a/grub-core/loader/i386/pc/plan9.c
++++ b/grub-core/loader/i386/pc/plan9.c
+@@ -34,6 +34,7 @@
+ #include <grub/cpu/relocator.h>
+ #include <grub/extcmd.h>
+ #include <grub/verify.h>
++#include <grub/i386/slaunch.h>
+ 
+ GRUB_MOD_LICENSE ("GPLv3+");
+ 
+@@ -84,7 +85,7 @@ grub_plan9_boot (void)
+     .ebx = 0,
+     .ecx = 0,
+     .edx = 0,
+-    .edi = 0,
++    .edi = SLP_NONE,
+     .esp = 0,
+     .ebp = 0,
+     .esi = 0
 diff --git a/grub-core/loader/i386/slaunch.c b/grub-core/loader/i386/slaunch.c
 new file mode 100644
-index 000000000000..72d09236b2ae
+index 000000000000..9b2efd755f89
 --- /dev/null
 +++ b/grub-core/loader/i386/slaunch.c
-@@ -0,0 +1,194 @@
+@@ -0,0 +1,201 @@
 +/*
 + *  GRUB  --  GRand Unified Bootloader
 + *  Copyright (C) 2020  Oracle and/or its affiliates.
@@ -627,6 +670,10 @@ index 000000000000..72d09236b2ae
 +  if (slp == SLP_NONE)
 +    return grub_error (GRUB_ERR_BAD_ARGUMENT, N_("secure launch not enabled"));
 +
++  if (slp > SLP_INTEL_TXT)
++    return grub_error (GRUB_ERR_BAD_ARGUMENT,
++		       N_("unknown secure launch platform type: %d"), slp);
++
 +  grub_errno = GRUB_ERR_NONE;
 +
 +  file = grub_file_open (argv[0], GRUB_FILE_TYPE_SLAUNCH_MODULE);
@@ -674,7 +721,7 @@ index 000000000000..72d09236b2ae
 +
 +  return GRUB_ERR_NONE;
 +
-+ fail:
++fail:
 +  grub_error_push ();
 +
 +  grub_free (slaunch_module);
@@ -699,6 +746,9 @@ index 000000000000..72d09236b2ae
 +      grub_printf ("Secure launcher: Intel TXT\n");
 +      grub_txt_state_show ();
 +    }
++  else
++    return grub_error (GRUB_ERR_BAD_ARGUMENT,
++		       N_("Unknown secure launcher platform type: %d\n"), slp);
 +
 +  return GRUB_ERR_NONE;
 +}
@@ -710,7 +760,7 @@ index 000000000000..72d09236b2ae
 +  cmd_slaunch = grub_register_command ("slaunch", grub_cmd_slaunch,
 +				       NULL, N_("Enable secure launcher"));
 +  cmd_slaunch_module = grub_register_command ("slaunch_module", grub_cmd_slaunch_module,
-+					      NULL, N_("Secure launcher module command"));
++					      NULL, N_("Load secure launcher module from file"));
 +  cmd_slaunch_state = grub_register_command ("slaunch_state", grub_cmd_slaunch_state,
 +					     NULL, N_("Display secure launcher state"));
 +}

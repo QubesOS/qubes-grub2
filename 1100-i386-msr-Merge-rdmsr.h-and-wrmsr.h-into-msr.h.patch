@@ -1,7 +1,7 @@
-From a78796a23a33f12934ad45169be57735b05cdd81 Mon Sep 17 00:00:00 2001
+From 1614664a12563b23b2efd3b0c7b59a9c4ad10484 Mon Sep 17 00:00:00 2001
 From: Daniel Kiper <daniel.kiper@oracle.com>
 Date: Tue, 17 Dec 2019 17:51:29 +0100
-Subject: [PATCH 1101/1118] i386/msr: Merge rdmsr.h and wrmsr.h into msr.h
+Subject: [PATCH] i386/msr: Merge rdmsr.h and wrmsr.h into msr.h
 
 It does not make sense to have separate headers for separate static
 functions. Additionally, we have to add some constants with MSR addresses

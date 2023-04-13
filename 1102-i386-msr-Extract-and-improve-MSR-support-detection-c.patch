@@ -1,8 +1,7 @@
-From ccee3f6377ecf0fba2edda7518911b3167657838 Mon Sep 17 00:00:00 2001
+From e0f617c89e3a03cba4b5e48ffac8ef76cc7c0838 Mon Sep 17 00:00:00 2001
 From: Daniel Kiper <daniel.kiper@oracle.com>
 Date: Sat, 25 Apr 2020 16:43:52 +0200
-Subject: [PATCH 1103/1118] i386/msr: Extract and improve MSR support detection
- code
+Subject: [PATCH] i386/msr: Extract and improve MSR support detection code
 
 Currently rdmsr and wrmsr commands have own MSR support detection code.
 This code is the same. So, it is duplicated. Additionally, this code

@@ -1,21 +1,22 @@
-From 8287663cc69f939f6abc14e39cb8de7a6d89a93d Mon Sep 17 00:00:00 2001
+From 7238e5c808dcf90ccf813eb8d35a7060fb95c03f Mon Sep 17 00:00:00 2001
 From: Ross Philipson <ross.philipson@oracle.com>
 Date: Wed, 7 Aug 2019 14:46:17 -0400
-Subject: [PATCH 1113/1118] i386/txt: Add Intel TXT verification routines
+Subject: [PATCH] i386/txt: Add Intel TXT verification routines
 
 Signed-off-by: Ross Philipson <ross.philipson@oracle.com>
 Signed-off-by: Daniel Kiper <daniel.kiper@oracle.com>
+Signed-off-by: Krystian Hebel <krystian.hebel@3mdeb.com>
 ---
- grub-core/loader/i386/txt/verify.c | 297 +++++++++++++++++++++++++++++
- 1 file changed, 297 insertions(+)
+ grub-core/loader/i386/txt/verify.c | 304 +++++++++++++++++++++++++++++
+ 1 file changed, 304 insertions(+)
  create mode 100644 grub-core/loader/i386/txt/verify.c
 
 diff --git a/grub-core/loader/i386/txt/verify.c b/grub-core/loader/i386/txt/verify.c
 new file mode 100644
-index 000000000000..16b898041f65
+index 000000000000..d0af8d8bc4e5
 --- /dev/null
 +++ b/grub-core/loader/i386/txt/verify.c
-@@ -0,0 +1,297 @@
+@@ -0,0 +1,304 @@
 +/*
 + * verify.c: verify that platform and processor supports Intel(r) TXT
 + *
@@ -245,15 +246,15 @@ index 000000000000..16b898041f65
 +grub_txt_verify_platform (void)
 +{
 +  grub_uint8_t *txt_heap;
-+  grub_uint32_t eax, ebx, ecx, edx;
-+  grub_uint64_t bios_size, heap_base, heap_size, msr;
++  grub_uint32_t eax, ebx, ecx, edx, errorcode, heap_base, heap_size;
++  grub_uint64_t bios_size, msr;
 +  grub_err_t err = GRUB_ERR_NONE;
 +  struct grub_txt_bios_data *bios_data;
 +  struct grub_txt_heap_ext_data_element *elts;
 +
 +  grub_cpuid (GRUB_X86_CPUID_FEATURES, eax, ebx, ecx, edx);
 +
-+  if (!(ecx & GRUB_SMX_CPUID_FEATURE))
++  if (!(ecx & GRUB_X86_CPUID_FEATURES_ECX_SMX))
 +    return grub_error (GRUB_ERR_BAD_DEVICE, N_("CPU does not support SMX"));
 +
 +  msr = grub_rdmsr (GRUB_MSR_X86_FEATURE_CONTROL);
@@ -271,7 +272,14 @@ index 000000000000..16b898041f65
 +   * Eventually need the verify_IA32_se_svn_status routine to be called here.
 +   */
 +
-+  if (grub_txt_reg_pub_readq (GRUB_TXT_ESTS) & GRUB_TXT_ESTS_TXT_RESET)
++  errorcode = grub_txt_reg_pub_readl (GRUB_TXT_ERRORCODE);
++  /* 0 - no previous SENTER, 0xC0000001 - previous SENTER succeeded */
++  if ( errorcode != 0 && errorcode != 0xC0000001 )
++     return grub_error (GRUB_ERR_BAD_DEVICE,
++			N_("TXT_ERRORCODE reports failure: 0x%08" PRIxGRUB_UINT32_T),
++			errorcode);
++
++  if (grub_txt_reg_pub_readb (GRUB_TXT_ESTS) & GRUB_TXT_ESTS_TXT_RESET)
 +     return grub_error (GRUB_ERR_BAD_DEVICE,
 +			N_("TXT_RESET.STS is set and GETSEC[SENTER] is disabled"));
 +
@@ -281,8 +289,8 @@ index 000000000000..16b898041f65
 +   */
 +
 +  txt_heap = grub_txt_get_heap ();
-+  heap_base = grub_txt_reg_pub_readq (GRUB_TXT_HEAP_BASE);
-+  heap_size = grub_txt_reg_pub_readq (GRUB_TXT_HEAP_SIZE);
++  heap_base = grub_txt_reg_pub_readl (GRUB_TXT_HEAP_BASE);
++  heap_size = grub_txt_reg_pub_readl (GRUB_TXT_HEAP_SIZE);
 +
 +  if ( txt_heap == NULL || heap_base == 0 || heap_size == 0 )
 +     return grub_error (GRUB_ERR_BAD_DEVICE,

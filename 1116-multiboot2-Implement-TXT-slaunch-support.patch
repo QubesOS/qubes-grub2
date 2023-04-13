@@ -1,7 +1,7 @@
-From 385569aa9be925c96e8112c69437241831152dd5 Mon Sep 17 00:00:00 2001
+From b85ff5887e756890011ed8c00ab56c3fefdbc224 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Micha=C5=82=20=C5=BBygowski?= <michal.zygowski@3mdeb.com>
 Date: Thu, 1 Sep 2022 17:58:53 +0200
-Subject: [PATCH 1118/1118] multiboot2: Implement TXT slaunch support
+Subject: [PATCH] multiboot2: Implement TXT slaunch support
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
 Content-Transfer-Encoding: 8bit
@@ -12,9 +12,9 @@ Signed-off-by: Krystian Hebel <krystian.hebel@3mdeb.com>
 ---
  grub-core/loader/multiboot.c       |  19 +++++-
  grub-core/loader/multiboot_elfxx.c | 102 ++++++++++++++++++++++++++---
- grub-core/loader/multiboot_mbi2.c  |  55 ++++++++++++++++
+ grub-core/loader/multiboot_mbi2.c  |  39 +++++++++++
  include/grub/i386/txt.h            |   1 +
- 4 files changed, 168 insertions(+), 9 deletions(-)
+ 4 files changed, 152 insertions(+), 9 deletions(-)
 
 diff --git a/grub-core/loader/multiboot.c b/grub-core/loader/multiboot.c
 index 3ab0c828c3ae..eb2da8546d9a 100644
@@ -199,7 +199,7 @@ index f2318e0d165d..47ba4c3f2746 100644
      if (phdr(i)->p_vaddr <= ehdr->e_entry
  	&& phdr(i)->p_vaddr + phdr(i)->p_memsz > ehdr->e_entry)
 diff --git a/grub-core/loader/multiboot_mbi2.c b/grub-core/loader/multiboot_mbi2.c
-index 9a943d7bdd7c..14ac7137cd09 100644
+index 9a943d7bdd7c..eb617083f8e5 100644
 --- a/grub-core/loader/multiboot_mbi2.c
 +++ b/grub-core/loader/multiboot_mbi2.c
 @@ -36,6 +36,9 @@
@@ -222,7 +222,7 @@ index 9a943d7bdd7c..14ac7137cd09 100644
        grub_uint64_t load_addr = (addr_tag->load_addr + 1)
  	? addr_tag->load_addr : (addr_tag->header_addr
  				 - ((char *) header - (char *) mld.buffer));
-@@ -390,6 +396,50 @@ grub_multiboot2_load (grub_file_t file, const char *filename)
+@@ -390,6 +396,34 @@ grub_multiboot2_load (grub_file_t file, const char *filename)
      err = grub_multiboot2_set_console (GRUB_MULTIBOOT2_CONSOLE_EGA_TEXT,
  				       accepted_consoles,
  				       0, 0, 0, console_required);
@@ -244,28 +244,12 @@ index 9a943d7bdd7c..14ac7137cd09 100644
 +      slparams->tpm_evt_log_base = get_physical_target_address (ch);
 +      slparams->tpm_evt_log_size = GRUB_SLAUNCH_TPM_EVT_LOG_SIZE;
 +
-+      grub_memset (get_virtual_current_address (ch), 0, slparams->tpm_evt_log_size);
++      grub_txt_init_tpm_event_log(get_virtual_current_address (ch),
++				  slparams->tpm_evt_log_size);
 +
 +      grub_dprintf ("multiboot_loader", "tpm_evt_log_base = %lx, tpm_evt_log_size = %x\n",
 +		    (unsigned long) slparams->tpm_evt_log_base,
 +		    (unsigned) slparams->tpm_evt_log_size);
-+
-+      if (grub_relocator_alloc_chunk_align_safe (grub_multiboot2_relocator, &ch, 0x1000000,
-+						 UP_TO_TOP32 (GRUB_MLE_AP_WAKE_BLOCK_SIZE),
-+						 GRUB_MLE_AP_WAKE_BLOCK_SIZE, GRUB_PAGE_SIZE,
-+						 GRUB_RELOCATOR_PREFERENCE_NONE, 1))
-+	{
-+	  grub_free (mld.buffer);
-+	  return grub_error (GRUB_ERR_OUT_OF_MEMORY, "Could not allocate AP wakeup block");
-+	}
-+
-+      slparams->ap_wake_block = get_physical_target_address (ch);
-+      slparams->ap_wake_block_size = GRUB_MLE_AP_WAKE_BLOCK_SIZE;
-+
-+      grub_memset ((void *) (grub_addr_t)slparams->ap_wake_block, 0, slparams->ap_wake_block_size);
-+      grub_dprintf ("multiboot_loader", "ap_wake_block = %lx, ap_wake_block_size = %lx\n",
-+		    (unsigned long) slparams->ap_wake_block,
-+		    (unsigned long) slparams->ap_wake_block_size);
 +
 +      grub_txt_setup_mle_ptab (slparams);
 +    }
@@ -273,7 +257,7 @@ index 9a943d7bdd7c..14ac7137cd09 100644
    return err;
  }
  
-@@ -722,7 +772,12 @@ grub_multiboot2_make_mbi (grub_uint32_t *target)
+@@ -722,7 +756,12 @@ grub_multiboot2_make_mbi (grub_uint32_t *target)
  
    ptrorig = get_virtual_current_address (ch);
  #if defined (__i386__) || defined (__x86_64__)
@@ -287,7 +271,7 @@ index 9a943d7bdd7c..14ac7137cd09 100644
    *target = get_physical_target_address (ch) | 0x80000000;
  #else
 diff --git a/include/grub/i386/txt.h b/include/grub/i386/txt.h
-index a8ac569968c7..6166f17ff5ee 100644
+index 0d2ca5b298c1..53355d511412 100644
 --- a/include/grub/i386/txt.h
 +++ b/include/grub/i386/txt.h
 @@ -101,6 +101,7 @@ struct grub_txt_acm_header

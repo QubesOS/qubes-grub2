@@ -1,50 +1,49 @@
-From 92abb1b1c33a697d51d3c95ee0861f65c939e092 Mon Sep 17 00:00:00 2001
+From 33c31aa22cab2841aa9d4f9578f61a926c30eb8e Mon Sep 17 00:00:00 2001
 From: Ross Philipson <ross.philipson@oracle.com>
 Date: Wed, 7 Aug 2019 13:50:14 -0400
-Subject: [PATCH 1109/1118] i386/slaunch: Add basic platform support for secure
- launch
+Subject: [PATCH] i386/slaunch: Add basic platform support for secure launch
 
 Signed-off-by: Ross Philipson <ross.philipson@oracle.com>
 Signed-off-by: Daniel Kiper <daniel.kiper@oracle.com>
+Signed-off-by: Krystian Hebel <krystian.hebel@3mdeb.com>
 ---
- include/grub/i386/cpuid.h |  13 +++
- include/grub/i386/crfr.h  | 186 ++++++++++++++++++++++++++++++++++++++
- include/grub/i386/mmio.h  |  90 ++++++++++++++++++
- include/grub/i386/msr.h   |  61 +++++++++++++
- 4 files changed, 350 insertions(+)
+ include/grub/i386/cpuid.h |  12 ++++
+ include/grub/i386/crfr.h  | 127 ++++++++++++++++++++++++++++++++++++++
+ include/grub/i386/mmio.h  |  72 +++++++++++++++++++++
+ include/grub/i386/msr.h   |  61 ++++++++++++++++++
+ 4 files changed, 272 insertions(+)
  create mode 100644 include/grub/i386/crfr.h
  create mode 100644 include/grub/i386/mmio.h
 
 diff --git a/include/grub/i386/cpuid.h b/include/grub/i386/cpuid.h
-index f7ae4b0a4641..8176e5d113d8 100644
+index f7ae4b0a4641..0ddd87b1544e 100644
 --- a/include/grub/i386/cpuid.h
 +++ b/include/grub/i386/cpuid.h
-@@ -19,6 +19,19 @@
+@@ -19,6 +19,18 @@
  #ifndef GRUB_CPU_CPUID_HEADER
  #define GRUB_CPU_CPUID_HEADER 1
  
 +/* General  */
-+#define GRUB_X86_CPUID_VENDOR	0x00000000
-+#define GRUB_X86_CPUID_FEATURES	0x00000001
-+
++#define GRUB_X86_CPUID_VENDOR		0x00000000
++#define GRUB_X86_CPUID_FEATURES		0x00000001
 +/* Intel  */
-+#define GRUB_VMX_CPUID_FEATURE	(1<<5)
-+#define GRUB_SMX_CPUID_FEATURE	(1<<6)
++#define GRUB_X86_CPUID_FEATURES_ECX_VMX	(1<<5)
++#define GRUB_X86_CPUID_FEATURES_ECX_SMX	(1<<6)
 +
 +/* AMD  */
-+#define GRUB_AMD_CPUID_FEATURES	0x80000001
-+#define GRUB_SVM_CPUID_FEATURE	(1<<2)
-+#define GRUB_AMD_CPUID_FUNC	0x8000000a
++#define GRUB_AMD_CPUID_FEATURES		0x80000001
++#define GRUB_AMD_CPUID_FEATURES_ECX_SVM	(1<<2)
++#define GRUB_AMD_CPUID_FUNC		0x8000000a
 +
  extern unsigned char grub_cpuid_has_longmode;
  extern unsigned char grub_cpuid_has_pae;
  
 diff --git a/include/grub/i386/crfr.h b/include/grub/i386/crfr.h
 new file mode 100644
-index 000000000000..284d6967be4b
+index 000000000000..1dcae427dc8b
 --- /dev/null
 +++ b/include/grub/i386/crfr.h
-@@ -0,0 +1,186 @@
+@@ -0,0 +1,127 @@
 +/*
 + *  GRUB  --  GRand Unified Bootloader
 + *  Copyright (C) 2020  Oracle and/or its affiliates.
@@ -98,6 +97,22 @@ index 000000000000..284d6967be4b
 +#define GRUB_CR4_X86_PCIDE	0x00020000 /* Enable PCID */
 +
 +static inline unsigned long
++grub_read_cr0 (void)
++{
++  unsigned long val;
++
++  asm volatile ("mov %%cr0, %0" : "=r" (val) : : "memory");
++
++  return val;
++}
++
++static inline void
++grub_write_cr0 (unsigned long val)
++{
++  asm volatile ("mov %0, %%cr0" : : "r" (val) : "memory");
++}
++
++static inline unsigned long
 +grub_read_cr4 (void)
 +{
 +  unsigned long val;
@@ -111,81 +126,6 @@ index 000000000000..284d6967be4b
 +grub_write_cr4 (unsigned long val)
 +{
 +  asm volatile ("mov %0, %%cr4" : : "r" (val) : "memory");
-+}
-+
-+#define GRUB_CR0	0
-+#define GRUB_CR1	1
-+#define GRUB_CR2	2
-+#define GRUB_CR3	3
-+#define GRUB_CR4	4
-+
-+#ifdef __x86_64__
-+#define read_cr(r, d) asm volatile ("movq %%cr" r ", %0" : "=r" (d))
-+#else
-+#define read_cr(r, d) asm volatile ("movl %%cr" r ", %0" : "=r" (d))
-+#endif
-+
-+static inline unsigned long
-+grub_read_control_register(grub_uint8_t reg)
-+{
-+  unsigned long data;
-+
-+  switch (reg)
-+  {
-+  case GRUB_CR0:
-+    read_cr("0", data);
-+    break;
-+  case GRUB_CR1:
-+    read_cr("1", data);
-+    break;
-+  case GRUB_CR2:
-+    read_cr("2", data);
-+    break;
-+  case GRUB_CR3:
-+    read_cr("3", data);
-+    break;
-+  case GRUB_CR4:
-+    read_cr("4", data);
-+    break;
-+  default:
-+    /* TODO: Loudly complain if this is called. Even some kind of BUG() */
-+    data = ~0UL;
-+    break;
-+  }
-+
-+  return data;
-+}
-+
-+#ifdef __x86_64__
-+#define write_cr(r, d) asm volatile ("movq %0, %%cr" r : : "r" (d))
-+#else
-+#define write_cr(r, d) asm volatile ("movl %0, %%cr" r : : "r" (d))
-+#endif
-+
-+static inline void
-+grub_write_control_register(grub_uint8_t reg, unsigned long data)
-+{
-+  switch (reg)
-+  {
-+  case GRUB_CR0:
-+    write_cr("0", data);
-+    break;
-+  case GRUB_CR1:
-+    write_cr("1", data);
-+    break;
-+  case GRUB_CR2:
-+    write_cr("2", data);
-+    break;
-+  case GRUB_CR3:
-+    write_cr("3", data);
-+    break;
-+  case GRUB_CR4:
-+    write_cr("4", data);
-+    break;
-+  default:
-+    /* TODO: Loudly complain if this is called. Even some kind of BUG() */
-+    ;
-+  }
 +}
 +
 +#define GRUB_EFLAGS_X86_CF	0x00000001 /* Carry Flag */
@@ -233,10 +173,10 @@ index 000000000000..284d6967be4b
 +#endif
 diff --git a/include/grub/i386/mmio.h b/include/grub/i386/mmio.h
 new file mode 100644
-index 000000000000..6f5bf18ce3ac
+index 000000000000..b5bce71ef8d6
 --- /dev/null
 +++ b/include/grub/i386/mmio.h
-@@ -0,0 +1,90 @@
+@@ -0,0 +1,72 @@
 +/*
 + *  GRUB  --  GRand Unified Bootloader
 + *  Copyright (C) 2020  Oracle and/or its affiliates.
@@ -260,70 +200,52 @@ index 000000000000..6f5bf18ce3ac
 +
 +#include <grub/types.h>
 +
-+/* TODO: Are these barirers really needed??? */
-+#define grub_mb()	asm volatile ("mfence" : : : "memory")
-+#define grub_rmb()	asm volatile ("lfence" : : : "memory")
-+#define grub_wmb()	asm volatile ("sfence" : : : "memory")
-+#define grub_barrier()	asm volatile ("" : : : "memory")
-+
 +static inline grub_uint8_t
-+grub_readb (const volatile void *addr)
++grub_readb (const grub_addr_t addr)
 +{
 +  grub_uint8_t val;
 +
-+  grub_barrier ();
 +  val = (*(volatile grub_uint8_t *) (addr));
-+  grub_rmb ();
 +
 +  return val;
 +}
 +
 +static inline grub_uint32_t
-+grub_readl (const volatile void *addr)
++grub_readl (const grub_addr_t addr)
 +{
 +  grub_uint32_t val;
 +
-+  grub_barrier ();
 +  val = (*(volatile grub_uint32_t *) (addr));
-+  grub_rmb ();
 +
 +  return val;
 +}
 +
 +static inline grub_uint64_t
-+grub_readq (const volatile void *addr)
++grub_readq (const grub_addr_t addr)
 +{
 +  grub_uint64_t val;
 +
-+  grub_barrier ();
 +  val = (*(volatile grub_uint64_t *) (addr));
-+  grub_rmb ();
 +
 +  return val;
 +}
 +
 +static inline void
-+grub_writeb (grub_uint8_t val, volatile void *addr)
++grub_writeb (grub_uint8_t val, grub_addr_t addr)
 +{
-+  grub_wmb ();
 +  (*(volatile grub_uint8_t *) (addr)) = val;
-+  grub_barrier ();
 +}
 +
 +static inline void
-+grub_writel (grub_uint32_t val, volatile void *addr)
++grub_writel (grub_uint32_t val, grub_addr_t addr)
 +{
-+  grub_wmb ();
 +  (*(volatile grub_uint32_t *) (addr)) = val;
-+  grub_barrier ();
 +}
 +
 +static inline void
-+grub_writeq (grub_uint64_t val, volatile void *addr)
++grub_writeq (grub_uint64_t val, grub_addr_t addr)
 +{
-+  grub_wmb ();
 +  (*(volatile grub_uint64_t *) (addr)) = val;
-+  grub_barrier ();
 +}
 +
 +#endif /* GRUB_I386_MMIO_H */

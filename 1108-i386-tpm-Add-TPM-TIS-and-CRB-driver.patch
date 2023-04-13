@@ -1,25 +1,25 @@
-From 4b1ce3e251cc45963cb69fffdf8916e638f543f9 Mon Sep 17 00:00:00 2001
+From 0a9bf6cbbfac39052763f7a2ea19c50108eef35c Mon Sep 17 00:00:00 2001
 From: Daniel Kiper <daniel.kiper@oracle.com>
 Date: Mon, 4 May 2020 22:30:58 +0200
-Subject: [PATCH 1108/1118] i386/tpm: Add TPM TIS and CRB driver
+Subject: [PATCH] i386/tpm: Add TPM TIS and CRB driver
 
 It will be used by Intel TXT secure launcher introduced
 by subsequent patches.
 
 Signed-off-by: Daniel Kiper <daniel.kiper@oracle.com>
 ---
- grub-core/commands/i386/tpm.c | 182 ++++++++++++++++++++++++++++++++++
+ grub-core/commands/i386/tpm.c | 187 ++++++++++++++++++++++++++++++++++
  include/grub/i386/tpm.h       |  36 +++++++
- 2 files changed, 218 insertions(+)
+ 2 files changed, 223 insertions(+)
  create mode 100644 grub-core/commands/i386/tpm.c
  create mode 100644 include/grub/i386/tpm.h
 
 diff --git a/grub-core/commands/i386/tpm.c b/grub-core/commands/i386/tpm.c
 new file mode 100644
-index 000000000000..ff29c2e85070
+index 000000000000..232e8bbb946e
 --- /dev/null
 +++ b/grub-core/commands/i386/tpm.c
-@@ -0,0 +1,182 @@
+@@ -0,0 +1,187 @@
 +/*
 + *  GRUB  --  GRand Unified Bootloader
 + *  Copyright (C) 2020  Free Software Foundation, Inc.
@@ -53,8 +53,12 @@ index 000000000000..ff29c2e85070
 +
 +GRUB_MOD_LICENSE ("GPLv3+");
 +
++/* Code based on TCG PC Client Platform TPM Profile Specification for TPM 2.0,
++   Version 1.05 Revision 14 released September 4, 2020. */
++
 +#define TPM_MMIO_BASE		0xfed40000
 +
++/* 6.3.2 Register Space Addresses */
 +/* TIS registers. */
 +#define TPM_ACCESS		0x0000
 +#define TPM_INTF_CAPABILITY	0x0014
@@ -63,16 +67,12 @@ index 000000000000..ff29c2e85070
 +/* CRB registers. */
 +#define TPM_LOC_CTRL		0x0008
 +
-+#define TPM_12_TIS_INTF_12	0x0
-+#define TPM_12_TIS_INTF_13	0x2
-+#define TPM_20_TIS_INTF_13	0x3
-+
-+#define TPM_CRB_INTF_ACTIVE	0x1
 +
 +#define TIS_RELINQUISH_LCL	0x20
 +#define CRB_RELINQUISH_LCL	0x0002
 +
-+/* TODO: Do we need GRUB_PACKED for unions below??? */
++/* 6.4.2 Interface Identifier Register */
++#define TPM_CRB_INTF_ACTIVE	0x1
 +
 +union tpm_interface_id
 +{
@@ -91,8 +91,13 @@ index 000000000000..ff29c2e85070
 +    grub_uint32_t reserved_1:4;
 +    grub_uint32_t reserved_2:8;
 +  };
-+} GRUB_PACKED;
++};
 +typedef union tpm_interface_id tpm_interface_id_t;
++
++/* 6.5.2.7 Interface Capability */
++#define TPM_12_TIS_INTF_12	0x0
++#define TPM_12_TIS_INTF_13	0x2
++#define TPM_20_TIS_INTF_13	0x3
 +
 +union tpm_intf_capability
 +{
@@ -113,7 +118,7 @@ index 000000000000..ff29c2e85070
 +    grub_uint32_t interface_version:3;
 +    grub_uint32_t reserved_1:1;
 +  };
-+} GRUB_PACKED;
++};
 +typedef union tpm_intf_capability tpm_intf_capability_t;
 +
 +typedef enum
@@ -135,7 +140,7 @@ index 000000000000..ff29c2e85070
 +
 +/* Localities 0-4 are supported only. */
 +void
-+grub_tpm_relinquish_lcl (grub_uint8_t lcl)
++grub_tpm_relinquish_locality (grub_uint8_t lcl)
 +{
 +  grub_addr_t addr = TPM_MMIO_BASE + lcl * GRUB_PAGE_SIZE;
 +
@@ -163,7 +168,7 @@ index 000000000000..ff29c2e85070
 +  else if (tpm_intf == TPM_INTF_CRB)
 +    tpm_intf_s = "CRB";
 +
-+  grub_printf ("TPM VER: %s\nTPM INTF: %s\n", tpm_ver_s, tpm_intf_s);
++  grub_printf ("TPM family: %s\nTPM interface: %s\n", tpm_ver_s, tpm_intf_s);
 +
 +  return GRUB_ERR_NONE;
 +}
@@ -204,7 +209,7 @@ index 000000000000..ff29c2e85070
 +}
 diff --git a/include/grub/i386/tpm.h b/include/grub/i386/tpm.h
 new file mode 100644
-index 000000000000..ae8d4a27def7
+index 000000000000..d22a2507efa1
 --- /dev/null
 +++ b/include/grub/i386/tpm.h
 @@ -0,0 +1,36 @@
@@ -241,7 +246,7 @@ index 000000000000..ae8d4a27def7
 +grub_tpm_ver_t;
 +
 +extern grub_tpm_ver_t grub_get_tpm_ver (void);
-+extern void grub_tpm_relinquish_lcl (grub_uint8_t lcl);
++extern void grub_tpm_relinquish_locality (grub_uint8_t lcl);
 +
 +#endif /* GRUB_I386_TPM_H */
 -- 

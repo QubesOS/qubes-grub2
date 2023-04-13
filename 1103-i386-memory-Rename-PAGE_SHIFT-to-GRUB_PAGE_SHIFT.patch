@@ -1,7 +1,7 @@
-From e6e4cf0b0e1f2ee45706203ba8f30a7954acc83d Mon Sep 17 00:00:00 2001
+From 938357ec4fd8a8522fc55d3d050eff1f2235407d Mon Sep 17 00:00:00 2001
 From: Daniel Kiper <daniel.kiper@oracle.com>
 Date: Wed, 20 Nov 2019 12:40:42 +0100
-Subject: [PATCH 1104/1118] i386/memory: Rename PAGE_SHIFT to GRUB_PAGE_SHIFT
+Subject: [PATCH] i386/memory: Rename PAGE_SHIFT to GRUB_PAGE_SHIFT
 
 ...to avoid potential conflicts and confusion.
 

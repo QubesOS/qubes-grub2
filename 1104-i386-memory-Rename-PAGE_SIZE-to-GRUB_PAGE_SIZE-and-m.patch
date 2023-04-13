@@ -1,8 +1,8 @@
-From be6df1e0e6b5fcbf26389e27288c54675d7e1aa5 Mon Sep 17 00:00:00 2001
+From 4e9a66d61b076b01826af440f581bb0c26c58431 Mon Sep 17 00:00:00 2001
 From: Daniel Kiper <daniel.kiper@oracle.com>
 Date: Wed, 20 Nov 2019 12:52:16 +0100
-Subject: [PATCH 1105/1118] i386/memory: Rename PAGE_SIZE to GRUB_PAGE_SIZE and
- make it global
+Subject: [PATCH] i386/memory: Rename PAGE_SIZE to GRUB_PAGE_SIZE and make it
+ global
 
 Subsequent patches will use that constant.
 

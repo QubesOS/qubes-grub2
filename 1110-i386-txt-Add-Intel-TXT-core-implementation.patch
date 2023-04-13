@@ -1,22 +1,29 @@
-From 52435a735ec9807383adc1ac77209ad77057f00c Mon Sep 17 00:00:00 2001
+From 38bf9bedd60fff65aa8402432ed05d7ed27d07c0 Mon Sep 17 00:00:00 2001
 From: Ross Philipson <ross.philipson@oracle.com>
 Date: Wed, 7 Aug 2019 13:57:33 -0400
-Subject: [PATCH 1111/1118] i386/txt: Add Intel TXT core implementation
+Subject: [PATCH] i386/txt: Add Intel TXT core implementation
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
 
 Signed-off-by: Ross Philipson <ross.philipson@oracle.com>
 Signed-off-by: Daniel Kiper <daniel.kiper@oracle.com>
+Signed-off-by: Michał Żygowski <michal.zygowski@3mdeb.com>
+Signed-off-by: Krystian Hebel <krystian.hebel@3mdeb.com>
 ---
- grub-core/loader/i386/txt/txt.c | 891 ++++++++++++++++++++++++++++++++
+ grub-core/loader/i386/txt/txt.c | 914 ++++++++++++++++++++++++++++++++
  include/grub/i386/memory.h      |   5 +
- 2 files changed, 896 insertions(+)
+ include/grub/i386/msr.h         |   1 +
+ include/grub/i386/txt.h         |  18 +-
+ 4 files changed, 935 insertions(+), 3 deletions(-)
  create mode 100644 grub-core/loader/i386/txt/txt.c
 
 diff --git a/grub-core/loader/i386/txt/txt.c b/grub-core/loader/i386/txt/txt.c
 new file mode 100644
-index 000000000000..201167ce9a44
+index 000000000000..9540719990bd
 --- /dev/null
 +++ b/grub-core/loader/i386/txt/txt.c
-@@ -0,0 +1,891 @@
+@@ -0,0 +1,914 @@
 +/*
 + * txt.c: Intel(r) TXT support functions, including initiating measured
 + *        launch, post-launch, AP wakeup, etc.
@@ -97,6 +104,14 @@ index 000000000000..201167ce9a44
 +enable_smx_mode (void)
 +{
 +  grub_uint32_t caps;
++  grub_uint64_t feat_ctrl = grub_rdmsr (GRUB_MSR_X86_FEATURE_CONTROL);
++
++  if (!(feat_ctrl & GRUB_MSR_X86_FEATURE_CTRL_LOCK))
++    {
++      grub_dprintf ("slaunch", "Firmware didn't lock FEATURE_CONTROL MSR,"
++		    "locking it now\n");
++      feat_ctrl |= GRUB_MSR_X86_FEATURE_CTRL_LOCK;
++    }
 +
 +  /* Enable SMX mode. */
 +  grub_write_cr4 (grub_read_cr4 () | GRUB_CR4_X86_SMXE);
@@ -203,7 +218,7 @@ index 000000000000..201167ce9a44
 +  grub_uint64_t mcg_cap, mcg_stat;
 +  unsigned long cr0;
 +
-+  cr0 = grub_read_control_register (GRUB_CR0);
++  cr0 = grub_read_cr0 ();
 +
 +  /* Cache must be enabled (CR0.CD = CR0.NW = 0). */
 +  cr0 &= ~(GRUB_CR0_X86_CD | GRUB_CR0_X86_NW);
@@ -211,7 +226,7 @@ index 000000000000..201167ce9a44
 +  /* Native FPU error reporting must be enabled for proper interaction behavior. */
 +  cr0 |= GRUB_CR0_X86_NE;
 +
-+  grub_write_control_register (GRUB_CR0, cr0);
++  grub_write_cr0 (cr0);
 +
 +  /* Disable virtual-8086 mode (EFLAGS.VM = 0). */
 +  grub_write_flags_register (grub_read_flags_register () & ~GRUB_EFLAGS_X86_VM);
@@ -480,16 +495,15 @@ index 000000000000..201167ce9a44
 +  grub_write_flags_register (eflags & ~GRUB_EFLAGS_X86_IF);
 +
 +  /* Save CR0 then disable cache (CRO.CD=1, CR0.NW=0) */
-+  cr0 = grub_read_control_register (GRUB_CR0);
-+  grub_write_control_register (GRUB_CR0,
-+                               (cr0 & ~GRUB_CR0_X86_NW) | GRUB_CR0_X86_CD);
++  cr0 = grub_read_cr0 ();
++  grub_write_cr0 ( (cr0 & ~GRUB_CR0_X86_NW) | GRUB_CR0_X86_CD );
 +
 +  /* Flush caches */
 +  asm volatile ("wbinvd");
 +
 +  /* Save CR4 and disable global pages (CR4.PGE=0) */
-+  cr4 = grub_read_control_register (GRUB_CR4);
-+  grub_write_control_register (GRUB_CR4, cr4 & ~GRUB_CR4_X86_PGE);
++  cr4 = grub_read_cr4 ();
++  grub_write_cr4 (cr4 & ~GRUB_CR4_X86_PGE);
 +
 +  /* Disable MTRRs */
 +  set_all_mtrrs (0);
@@ -508,11 +522,11 @@ index 000000000000..201167ce9a44
 +  /* Enable MTRRs */
 +  set_all_mtrrs (1);
 +
-+  /* Restore CR0 (cacheing) */
-+  grub_write_control_register (GRUB_CR0, cr0);
++  /* Restore CR0 (caching) */
++  grub_write_cr0 (cr0);
 +
 +  /* Restore CR4 (global pages) */
-+  grub_write_control_register (GRUB_CR4, cr4);
++  grub_write_cr4 (cr4);
 +
 +  /* Restore flags */
 +  grub_write_flags_register (eflags);
@@ -538,9 +552,12 @@ index 000000000000..201167ce9a44
 +
 +  txt_heap = grub_txt_get_heap ();
 +
++  grub_dprintf ("slaunch", "TXT heap %p\n", txt_heap);
++
 +  /* OS/loader to MLE data. */
 +
 +  os_mle_data = grub_txt_os_mle_data_start (txt_heap);
++  grub_dprintf ("slaunch", "OS MLE data: %p\n", os_mle_data);
 +  size = (grub_uint64_t *) ((grub_addr_t) os_mle_data - sizeof (grub_uint64_t));
 +  *size = sizeof (*os_mle_data) + sizeof (grub_uint64_t);
 +
@@ -556,10 +573,11 @@ index 000000000000..201167ce9a44
 +  os_mle_data->evtlog_addr = slparams->tpm_evt_log_base;
 +  os_mle_data->evtlog_size = slparams->tpm_evt_log_size;
 +
++  grub_dprintf ("slaunch", "Saving MTRRs to OS MLE data\n");
 +  save_mtrrs (os_mle_data);
 +
 +  /* OS/loader to SINIT data. */
-+
++  grub_dprintf ("slaunch", "Get supported OS SINIT data version\n");
 +  os_sinit_data_ver = grub_txt_supported_os_sinit_data_ver (sinit);
 +
 +  if (os_sinit_data_ver < OS_SINIT_DATA_MIN_VER)
@@ -568,6 +586,7 @@ index 000000000000..201167ce9a44
 +		       " expected >= %d"), os_sinit_data_ver, OS_SINIT_DATA_MIN_VER);
 +
 +  os_sinit_data = grub_txt_os_sinit_data_start (txt_heap);
++  grub_dprintf ("slaunch", "OS SINIT data: %p\n", os_sinit_data);
 +  size = (grub_uint64_t *) ((grub_addr_t) os_sinit_data - sizeof (grub_uint64_t));
 +
 +  *size = sizeof(grub_uint64_t) + sizeof (struct grub_txt_os_sinit_data) +
@@ -658,7 +677,7 @@ index 000000000000..201167ce9a44
 +      heap_end_element->type = GRUB_TXT_HEAP_EXTDATA_TYPE_END;
 +      heap_end_element->size = sizeof (*heap_end_element);
 +    }
-+
++  grub_dprintf ("slaunch", "TXT HEAP init done\n");
 +  /*
 +   * TODO: TXT spec: Note: BiosDataSize + OsMleDataSize + OsSinitDataSize + SinitMleDataSize
 +   * must be less than or equal to TXT.HEAP.SIZE, TXT spec, p. 102.
@@ -770,11 +789,16 @@ index 000000000000..201167ce9a44
 +void
 +grub_txt_state_show (void)
 +{
-+  grub_uint64_t data;
-+  grub_uint8_t *data8 = (grub_uint8_t *) &data;
++  union {
++    grub_uint64_t d64;
++    grub_uint32_t d32;
++    grub_uint8_t d8;
++    grub_uint8_t a8[8];
++  } data;
 +  int i;
++  union grub_txt_didvid didvid;
 +
-+  data = grub_txt_reg_pub_readq (GRUB_TXT_STS);
++  data.d64 = grub_txt_reg_pub_readq (GRUB_TXT_STS);
 +  grub_printf ("  TXT.STS: 0x%016" PRIxGRUB_UINT64_T "\n"
 +	       "    SENTER.DONE.STS:        %d\n"
 +	       "    SEXIT.DONE.STS:         %d\n"
@@ -782,88 +806,86 @@ index 000000000000..201167ce9a44
 +	       "    PRIVATEOPEN.STS:        %d\n"
 +	       "    TXT.LOCALITY1.OPEN.STS: %d\n"
 +	       "    TXT.LOCALITY2.OPEN.STS: %d\n",
-+	       data, !!(data & GRUB_TXT_STS_SENTER_DONE),
-+	       !!(data & GRUB_TXT_STS_SEXIT_DONE),
-+	       !!(data & GRUB_TXT_STS_MEM_CONFIG_LOCK),
-+	       !!(data & GRUB_TXT_STS_PRIVATE_OPEN),
-+	       !!(data & GRUB_TXT_STS_LOCALITY1_OPEN),
-+	       !!(data & GRUB_TXT_STS_LOCALITY2_OPEN));
++	       data.d64, !!(data.d64 & GRUB_TXT_STS_SENTER_DONE),
++	       !!(data.d64 & GRUB_TXT_STS_SEXIT_DONE),
++	       !!(data.d64 & GRUB_TXT_STS_MEM_CONFIG_LOCK),
++	       !!(data.d64 & GRUB_TXT_STS_PRIVATE_OPEN),
++	       !!(data.d64 & GRUB_TXT_STS_LOCALITY1_OPEN),
++	       !!(data.d64 & GRUB_TXT_STS_LOCALITY2_OPEN));
 +
 +  /* Only least significant byte has a meaning. */
-+  data = grub_txt_reg_pub_readq (GRUB_TXT_ESTS) & 0x00000000000000ff;
-+  grub_printf ("  TXT.ESTS: 0x%02" PRIxGRUB_UINT64_T "\n"
-+	       "    TXT_RESET.STS: %d\n", data,
-+	       !!(data & GRUB_TXT_ESTS_TXT_RESET));
++  data.d8 = grub_txt_reg_pub_readb (GRUB_TXT_ESTS);
++  grub_printf ("  TXT.ESTS: 0x%02x\n"
++	       "    TXT_RESET.STS: %d\n", data.d8,
++	       !!(data.d8 & GRUB_TXT_ESTS_TXT_RESET));
 +
-+  data = grub_txt_reg_pub_readq (GRUB_TXT_E2STS);
++  data.d64 = grub_txt_reg_pub_readq (GRUB_TXT_E2STS);
 +  grub_printf ("  TXT.E2STS: 0x%016" PRIxGRUB_UINT64_T "\n"
-+	       "    SECRETS.STS: %d\n", data,
-+	       !!(data & GRUB_TXT_E2STS_SECRETS));
++	       "    SECRETS.STS: %d\n", data.d64,
++	       !!(data.d64 & GRUB_TXT_E2STS_SECRETS));
 +
 +  /* Only least significant 4 bytes have a meaning. */
-+  data = grub_txt_reg_pub_readq (GRUB_TXT_ERRORCODE) & 0x00000000ffffffff;
-+  grub_printf ("  TXT.ERRORCODE: 0x%08" PRIxGRUB_UINT64_T "\n", data);
++  data.d32 = grub_txt_reg_pub_readl (GRUB_TXT_ERRORCODE);
++  grub_printf ("  TXT.ERRORCODE: 0x%08" PRIxGRUB_UINT32_T "\n", data.d32);
 +
-+  data = grub_txt_reg_pub_readq (GRUB_TXT_DIDVID);
++  didvid.value = grub_txt_reg_pub_readq (GRUB_TXT_DIDVID);
 +  grub_printf ("  TXT.DIDVID: 0x%016" PRIxGRUB_UINT64_T "\n"
-+	       "    VID:    0x%04" PRIxGRUB_UINT64_T "\n"
-+	       "    DID:    0x%04" PRIxGRUB_UINT64_T "\n"
-+	       "    RID:    0x%04" PRIxGRUB_UINT64_T "\n"
-+	       "    ID-EXT: 0x%04" PRIxGRUB_UINT64_T "\n",
-+	       data, data & 0x000000000000ffff,
-+	       (data & 0x00000000ffff0000) >> 16,
-+	       (data & 0x0000ffff00000000) >> 32, data >> 48);
++	       "    VID:    0x%04x\n"
++	       "    DID:    0x%04x\n"
++	       "    RID:    0x%04x\n"
++	       "    ID-EXT: 0x%04x\n",
++	       didvid.value, didvid.vid, didvid.did, didvid.rid, didvid.id_ext);
 +
 +  /* Only least significant 4 bytes have a meaning. */
-+  data = grub_txt_reg_pub_readq (GRUB_TXT_VER_FSBIF) & 0x00000000ffffffff;
-+  grub_printf ("  TXT.VER.FSBIF: 0x%08" PRIxGRUB_UINT64_T "\n", data);
++  data.d32 = grub_txt_reg_pub_readl (GRUB_TXT_VER_FSBIF);
++  grub_printf ("  TXT.VER.FSBIF: 0x%08" PRIxGRUB_UINT32_T "\n", data.d32);
 +
-+  if ((data != 0x00000000) && (data != 0xffffffff))
-+    grub_printf ("    DEBUG.FUSE: %d\n", !!(data & GRUB_TXT_VER_FSBIF_DEBUG_FUSE));
++  if ((data.d32 != 0x00000000) && (data.d32 != 0xffffffff))
++    grub_printf ("    DEBUG.FUSE: %d\n", !!(data.d32 & GRUB_TXT_VER_FSBIF_DEBUG_FUSE));
 +  else
 +    {
 +      /* Only least significant 4 bytes have a meaning. */
-+      data = grub_txt_reg_pub_readq (GRUB_TXT_VER_QPIIF) & 0x00000000ffffffff;
-+      grub_printf ("  TXT.VER.QPIIF: 0x%08" PRIxGRUB_UINT64_T "\n"
-+		   "    DEBUG.FUSE: %d\n", data,
-+		   !!(data & GRUB_TXT_VER_QPIIF_DEBUG_FUSE));
++      data.d32 = grub_txt_reg_pub_readl (GRUB_TXT_VER_QPIIF);
++      grub_printf ("  TXT.VER.QPIIF: 0x%08" PRIxGRUB_UINT32_T "\n"
++		   "    DEBUG.FUSE: %d\n", data.d32,
++		   !!(data.d32 & GRUB_TXT_VER_QPIIF_DEBUG_FUSE));
 +    }
 +
 +  /* Only least significant 4 bytes have a meaning. */
-+  data = grub_txt_reg_pub_readq (GRUB_TXT_SINIT_BASE) & 0x00000000ffffffff;
-+  grub_printf ("  TXT.SINIT.BASE: 0x%08" PRIxGRUB_UINT64_T "\n", data);
++  data.d32 = grub_txt_reg_pub_readl (GRUB_TXT_SINIT_BASE);
++  grub_printf ("  TXT.SINIT.BASE: 0x%08" PRIxGRUB_UINT32_T "\n", data.d32);
 +
 +  /* Only least significant 4 bytes have a meaning. */
-+  data = grub_txt_reg_pub_readq (GRUB_TXT_SINIT_SIZE) & 0x00000000ffffffff;
-+  grub_printf ("  TXT.SINIT.SIZE: %" PRIuGRUB_UINT64_T
-+	       " B (0x%" PRIxGRUB_UINT64_T ")\n", data, data);
++  data.d32 = grub_txt_reg_pub_readl (GRUB_TXT_SINIT_SIZE);
++  grub_printf ("  TXT.SINIT.SIZE: %" PRIuGRUB_UINT32_T
++	       " B (0x%" PRIxGRUB_UINT32_T ")\n", data.d32, data.d32);
 +
 +  /* Only least significant 4 bytes have a meaning. */
-+  data = grub_txt_reg_pub_readq (GRUB_TXT_HEAP_BASE) & 0x00000000ffffffff;
-+  grub_printf ("  TXT.HEAP.BASE: 0x%08" PRIxGRUB_UINT64_T "\n", data);
++  data.d32 = grub_txt_reg_pub_readl (GRUB_TXT_HEAP_BASE);
++  grub_printf ("  TXT.HEAP.BASE: 0x%08" PRIxGRUB_UINT32_T "\n", data.d32);
 +
 +  /* Only least significant 4 bytes have a meaning. */
-+  data = grub_txt_reg_pub_readq (GRUB_TXT_HEAP_SIZE) & 0x00000000ffffffff;
-+  grub_printf ("  TXT.HEAP.SIZE: %" PRIuGRUB_UINT64_T
-+	       " B (0x%" PRIxGRUB_UINT64_T ")\n", data, data);
++  data.d32 = grub_txt_reg_pub_readl (GRUB_TXT_HEAP_SIZE);
++  grub_printf ("  TXT.HEAP.SIZE: %" PRIuGRUB_UINT32_T
++	       " B (0x%" PRIxGRUB_UINT32_T ")\n", data.d32, data.d32);
 +
 +  /* Only least significant 4 bytes have a meaning. */
-+  data = grub_txt_reg_pub_readq (GRUB_TXT_DPR) & 0x00000000ffffffff;
-+  grub_printf ("  TXT.DPR: 0x%08" PRIxGRUB_UINT64_T "\n"
++  data.d32 = grub_txt_reg_pub_readl (GRUB_TXT_DPR);
++  grub_printf ("  TXT.DPR: 0x%08" PRIxGRUB_UINT32_T "\n"
 +	       "    LOCK: %d\n"
-+	       "    TOP:  0x%08" PRIxGRUB_UINT64_T "\n"
-+	       "    SIZE: %" PRIuGRUB_UINT64_T " MiB\n",
-+	       data, !!(data & (1 << 0)), (data & 0xfff00000),
-+	       (data & 0x00000ff0) >> 4);
++	       "    TOP:  0x%08" PRIxGRUB_UINT32_T "\n"
++	       "    SIZE: %" PRIuGRUB_UINT32_T " MiB\n",
++	       data.d32, !!(data.d32 & (1 << 0)), (data.d32 & 0xfff00000),
++	       (data.d32 & 0x00000ff0) >> 4);
 +
 +  grub_printf ("  TXT.PUBLIC.KEY:\n");
 +
 +  for (i = 0; i < 4; ++i)
 +    {
 +      /* TODO: Check relevant MSRs on SGX platforms. */
-+      data = grub_txt_reg_pub_readq (GRUB_TXT_PUBLIC_KEY + i * sizeof (grub_uint64_t));
-+      grub_printf ("    %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x%s", data8[0], data8[1],
-+		   data8[2], data8[3], data8[4], data8[5], data8[6], data8[7],
++      data.d64 = grub_txt_reg_pub_readq (GRUB_TXT_PUBLIC_KEY + i * sizeof (grub_uint64_t));
++      grub_printf ("    %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x%s", data.a8[0], data.a8[1],
++		   data.a8[2], data.a8[3], data.a8[4], data.a8[5], data.a8[6], data.a8[7],
 +		   (i < 3) ? ":\n" : "\n");
 +    }
 +}
@@ -880,10 +902,13 @@ index 000000000000..201167ce9a44
 +  if (sinit_base == NULL)
 +    return grub_errno;
 +
++  grub_dprintf ("slaunch", "Init TXT heap\n");
 +  err = init_txt_heap (slparams, sinit_base);
 +
 +  if (err != GRUB_ERR_NONE)
 +    return err;
++
++  grub_dprintf ("slaunch", "TXT heap successfully prepared\n");
 +
 +  /* Update the MLE header. */
 +  mle_header = (struct grub_txt_mle_header *)(grub_addr_t) (slparams->mle_start + slparams->mle_header_offset);
@@ -893,15 +918,20 @@ index 000000000000..201167ce9a44
 +  slparams->sinit_acm_base = (grub_uint32_t)(grub_addr_t) sinit_base;
 +  slparams->sinit_acm_size = sinit_base->size * 4;
 +
-+  grub_tpm_relinquish_lcl (0);
++  grub_tpm_relinquish_locality (0);
++  grub_dprintf ("slaunch", "TPM locality reliquished\n");
 +
 +  err = set_mtrrs_for_acmod (sinit_base);
 +  if (err)
 +    return grub_error (err, N_("secure launch failed to set MTRRs for ACM"));
 +
++  grub_dprintf ("slaunch", "MTRRs set for ACMOD\n");
++
 +  err = grub_txt_prepare_cpu ();
 +  if ( err )
 +    return err;
++
++  grub_dprintf ("slaunch", "CPU prepared for secure launch\n");
 +
 +  if (!(grub_rdmsr (GRUB_MSR_X86_APICBASE) & GRUB_MSR_X86_APICBASE_BSP))
 +    return grub_error (GRUB_ERR_BAD_DEVICE, N_("secure launch must run on BSP"));
@@ -933,6 +963,62 @@ index c64529630f19..56f64855be7e 100644
  struct grub_e820_mmap_entry
  {
    grub_uint64_t addr;
+diff --git a/include/grub/i386/msr.h b/include/grub/i386/msr.h
+index f2552ecbc6d4..99e2c6f675b3 100644
+--- a/include/grub/i386/msr.h
++++ b/include/grub/i386/msr.h
+@@ -31,6 +31,7 @@
+ #define GRUB_MSR_X86_APICBASE_BASE	(0xfffff<<12)
+ 
+ #define GRUB_MSR_X86_FEATURE_CONTROL	0x0000003a
++#define GRUB_MSR_X86_FEATURE_CTRL_LOCK	(1<<0)
+ #define GRUB_MSR_X86_ENABLE_VMX_IN_SMX	(1<<1)
+ #define GRUB_MSR_X86_SENTER_FUNCTIONS	(0x7f<<8)
+ #define GRUB_MSR_X86_SENTER_ENABLE	(1<<15)
+diff --git a/include/grub/i386/txt.h b/include/grub/i386/txt.h
+index 7d57af68841f..7a54632bede9 100644
+--- a/include/grub/i386/txt.h
++++ b/include/grub/i386/txt.h
+@@ -235,7 +235,7 @@ union grub_txt_didvid
+   };
+ } GRUB_PACKED;
+ 
+-#define GRUB_TXT_VERSION_DEBUG_FUSED	(1<<31)
++#define GRUB_TXT_VERSION_PROD_FUSED	(1<<31)
+ 
+ /* Appendix C Intel TXT Heap Memory */
+ 
+@@ -467,16 +467,28 @@ struct grub_txt_heap_event_log_ptr_elt2_1
+ 
+ /* TXT register and heap access */
+ 
++static inline grub_uint8_t
++grub_txt_reg_pub_readb (grub_uint32_t reg)
++{
++  return grub_readb (GRUB_TXT_CFG_REGS_PUB + reg);
++}
++
++static inline grub_uint32_t
++grub_txt_reg_pub_readl (grub_uint32_t reg)
++{
++  return grub_readl (GRUB_TXT_CFG_REGS_PUB + reg);
++}
++
+ static inline grub_uint64_t
+ grub_txt_reg_pub_readq (grub_uint32_t reg)
+ {
+-  return grub_readq ((void *) (GRUB_TXT_CFG_REGS_PUB + reg));
++  return grub_readq (GRUB_TXT_CFG_REGS_PUB + reg);
+ }
+ 
+ static inline grub_uint8_t *
+ grub_txt_get_heap (void)
+ {
+-  return (grub_uint8_t *)(grub_addr_t) grub_txt_reg_pub_readq (GRUB_TXT_HEAP_BASE);
++  return (grub_uint8_t *)(grub_addr_t) grub_txt_reg_pub_readl (GRUB_TXT_HEAP_BASE);
+ }
+ 
+ static inline grub_uint64_t
 -- 
 2.17.1
 

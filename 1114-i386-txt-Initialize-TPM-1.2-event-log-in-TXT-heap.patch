@@ -1,7 +1,7 @@
-From d9ba5e9769fb55b246bf76b3d812b85497610325 Mon Sep 17 00:00:00 2001
+From bcb5b12c584773f292777d33e50f44187f8ca497 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Micha=C5=82=20=C5=BBygowski?= <michal.zygowski@3mdeb.com>
 Date: Wed, 31 Aug 2022 14:37:49 +0200
-Subject: [PATCH 1115/1118] i386/txt: Initialize TPM 1.2 event log in TXT heap
+Subject: [PATCH] i386/txt: Initialize TPM 1.2 event log in TXT heap
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
 Content-Transfer-Encoding: 8bit
@@ -9,32 +9,55 @@ Content-Transfer-Encoding: 8bit
 Signed-off-by: Michał Żygowski <michal.zygowski@3mdeb.com>
 Signed-off-by: Krystian Hebel <krystian.hebel@3mdeb.com>
 ---
- grub-core/loader/i386/txt/txt.c | 61 +++++++++++++++++++++++++++++++--
- include/grub/i386/txt.h         | 29 ++++++++++++++++
- 2 files changed, 88 insertions(+), 2 deletions(-)
+ grub-core/loader/i386/linux.c   |  3 +-
+ grub-core/loader/i386/txt/txt.c | 70 ++++++++++++++++++++++++++++++++-
+ include/grub/i386/txt.h         | 31 +++++++++++++++
+ 3 files changed, 101 insertions(+), 3 deletions(-)
 
+diff --git a/grub-core/loader/i386/linux.c b/grub-core/loader/i386/linux.c
+index ba050de2d1df..bc8d511bd6dd 100644
+--- a/grub-core/loader/i386/linux.c
++++ b/grub-core/loader/i386/linux.c
+@@ -261,7 +261,8 @@ allocate_pages (grub_size_t prot_size, grub_size_t *align,
+ 	slparams.tpm_evt_log_base = get_physical_target_address (ch);
+ 	slparams.tpm_evt_log_size = GRUB_SLAUNCH_TPM_EVT_LOG_SIZE;
+ 
+-	grub_memset (get_virtual_current_address (ch), 0, slparams.tpm_evt_log_size);
++	grub_txt_init_tpm_event_log (get_virtual_current_address (ch),
++				     slparams.tpm_evt_log_size);
+ 
+ 	grub_dprintf ("linux", "tpm_evt_log_base = %lx, tpm_evt_log_size = %x\n",
+ 		      (unsigned long) slparams.tpm_evt_log_base,
 diff --git a/grub-core/loader/i386/txt/txt.c b/grub-core/loader/i386/txt/txt.c
-index 201167ce9a44..f3afb6ad1d92 100644
+index 9540719990bd..581cb166ac54 100644
 --- a/grub-core/loader/i386/txt/txt.c
 +++ b/grub-core/loader/i386/txt/txt.c
-@@ -501,6 +501,24 @@ set_mtrrs_for_acmod (struct grub_txt_acm_header *hdr)
+@@ -508,6 +508,32 @@ set_mtrrs_for_acmod (struct grub_txt_acm_header *hdr)
    return GRUB_ERR_NONE;
  }
  
-+static void init_tpm12_event_log(struct grub_slaunch_params *slparams)
++void
++grub_txt_init_tpm_event_log (void *buf, grub_size_t size)
 +{
 +  struct event_log_container *elog;
-+  elog = (struct event_log_container *)(grub_addr_t)slparams->tpm_evt_log_base;
 +
-+  if (slparams->tpm_evt_log_base == 0 || slparams->tpm_evt_log_size == 0)
++  if (buf == NULL || size == 0)
 +    return;
++
++  /* For TPM2 just clear the area, only TPM12 requires initialization. */
++  grub_memset (buf, 0, size);
++
++  if (grub_get_tpm_ver () != GRUB_TPM_12)
++    return;
++
++  elog = (struct event_log_container *) buf;
 +
 +  grub_memcpy((void *)elog->signature, EVTLOG_SIGNATURE, sizeof(elog->signature));
 +  elog->container_ver_major = EVTLOG_CNTNR_MAJOR_VER;
 +  elog->container_ver_minor = EVTLOG_CNTNR_MINOR_VER;
 +  elog->pcr_event_ver_major = EVTLOG_EVT_MAJOR_VER;
 +  elog->pcr_event_ver_minor = EVTLOG_EVT_MINOR_VER;
-+  elog->size = slparams->tpm_evt_log_size;
++  elog->size = size;
 +  elog->pcr_events_offset = sizeof(*elog);
 +  elog->next_event_offset = sizeof(*elog);
 +}
@@ -42,7 +65,7 @@ index 201167ce9a44..f3afb6ad1d92 100644
  static grub_err_t
  init_txt_heap (struct grub_slaunch_params *slparams, struct grub_txt_acm_header *sinit)
  {
-@@ -510,6 +528,7 @@ init_txt_heap (struct grub_slaunch_params *slparams, struct grub_txt_acm_header
+@@ -517,6 +543,7 @@ init_txt_heap (struct grub_slaunch_params *slparams, struct grub_txt_acm_header
    struct grub_txt_os_mle_data *os_mle_data;
    struct grub_txt_os_sinit_data *os_sinit_data;
    struct grub_txt_heap_end_element *heap_end_element;
@@ -50,7 +73,7 @@ index 201167ce9a44..f3afb6ad1d92 100644
    struct grub_txt_heap_event_log_pointer2_1_element *heap_event_log_pointer2_1_element;
  #ifdef GRUB_MACHINE_EFI
    struct grub_acpi_rsdp_v20 *rsdp;
-@@ -598,10 +617,31 @@ init_txt_heap (struct grub_slaunch_params *slparams, struct grub_txt_acm_header
+@@ -610,10 +637,31 @@ init_txt_heap (struct grub_slaunch_params *slparams, struct grub_txt_acm_header
  
    sinit_caps = grub_txt_get_sinit_capabilities (sinit);
  
@@ -83,12 +106,14 @@ index 201167ce9a44..f3afb6ad1d92 100644
    /* Choose monitor RLP wakeup mechanism first. */
    if (sinit_caps & GRUB_TXT_CAPS_MONITOR_SUPPORT)
      os_sinit_data->capabilities |= GRUB_TXT_CAPS_MONITOR_SUPPORT;
-@@ -614,9 +654,26 @@ init_txt_heap (struct grub_slaunch_params *slparams, struct grub_txt_acm_header
+@@ -626,9 +674,27 @@ init_txt_heap (struct grub_slaunch_params *slparams, struct grub_txt_acm_header
      os_sinit_data->capabilities |= GRUB_TXT_CAPS_ECX_PT_SUPPORT;
  
    if (grub_get_tpm_ver () == GRUB_TPM_12)
 -    return grub_error (GRUB_ERR_BAD_DEVICE, N_("TPM 1.2 is not supported"));
 +    {
++      grub_dprintf ("slaunch", "TPM 1.2 detected\n");
++      grub_dprintf ("slaunch", "Setting up TXT HEAP TPM event log element\n");
 +      os_sinit_data->flags = GRUB_TXT_PCR_EXT_MAX_PERF_POLICY;
 +      os_sinit_data->version = OS_SINIT_DATA_TPM_12_VER;
 +
@@ -97,7 +122,6 @@ index 201167ce9a44..f3afb6ad1d92 100644
 +      heap_tpm_event_log_element->type = GRUB_TXT_HEAP_EXTDATA_TYPE_TPM_EVENT_LOG_PTR;
 +      heap_tpm_event_log_element->size = sizeof (*heap_tpm_event_log_element);
 +      heap_tpm_event_log_element->event_log_phys_addr = slparams->tpm_evt_log_base;
-+      init_tpm12_event_log (slparams);
 +
 +      heap_end_element = (struct grub_txt_heap_end_element *)
 +  ((grub_addr_t) heap_tpm_event_log_element + heap_tpm_event_log_element->size);
@@ -112,7 +136,7 @@ index 201167ce9a44..f3afb6ad1d92 100644
  	return grub_error (GRUB_ERR_BAD_ARGUMENT,
  			   N_("original TXT TPM 2.0 event log format is not supported"));
 diff --git a/include/grub/i386/txt.h b/include/grub/i386/txt.h
-index 7d57af68841f..a8ac569968c7 100644
+index 7a54632bede9..0d2ca5b298c1 100644
 --- a/include/grub/i386/txt.h
 +++ b/include/grub/i386/txt.h
 @@ -22,6 +22,7 @@
@@ -157,7 +181,16 @@ index 7d57af68841f..a8ac569968c7 100644
 +
  /* TXT register and heap access */
  
- static inline grub_uint64_t
+ static inline grub_uint8_t
+@@ -692,6 +721,8 @@ extern struct grub_txt_acm_header* grub_txt_sinit_select (struct grub_txt_acm_he
+ extern grub_err_t grub_txt_verify_platform (void);
+ extern grub_err_t grub_txt_prepare_cpu (void);
+ 
++extern void grub_txt_init_tpm_event_log(void *buf, grub_size_t size);
++
+ extern grub_uint32_t grub_txt_get_mle_ptab_size (grub_uint32_t mle_size);
+ extern void grub_txt_setup_mle_ptab (struct grub_slaunch_params *slparams);
+ 
 -- 
 2.17.1
 

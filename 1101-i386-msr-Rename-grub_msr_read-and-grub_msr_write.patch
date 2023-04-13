@@ -1,8 +1,7 @@
-From 4529bfd79f5ba84a9fd11cef803bd8c8f8aa9f8f Mon Sep 17 00:00:00 2001
+From bb8fe14ea78fbd7ad92b3d53c69e3b961eb8ccdd Mon Sep 17 00:00:00 2001
 From: Daniel Kiper <daniel.kiper@oracle.com>
 Date: Tue, 17 Dec 2019 20:02:37 +0100
-Subject: [PATCH 1102/1118] i386/msr: Rename grub_msr_read() and
- grub_msr_write()
+Subject: [PATCH] i386/msr: Rename grub_msr_read() and grub_msr_write()
 
 ... to grub_rdmsr() and grub_wrmsr() respectively. New names are more
 obvious than older ones.

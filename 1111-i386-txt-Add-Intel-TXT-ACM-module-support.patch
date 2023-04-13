@@ -1,21 +1,22 @@
-From 2ff5828c221797a0165f7f9fd1459457ee1b499f Mon Sep 17 00:00:00 2001
+From b04efb5f9dfd96bc290109ddb6170822bc55dd6b Mon Sep 17 00:00:00 2001
 From: Ross Philipson <ross.philipson@oracle.com>
 Date: Wed, 7 Aug 2019 13:59:18 -0400
-Subject: [PATCH 1112/1118] i386/txt: Add Intel TXT ACM module support
+Subject: [PATCH] i386/txt: Add Intel TXT ACM module support
 
 Signed-off-by: Ross Philipson <ross.philipson@oracle.com>
 Signed-off-by: Daniel Kiper <daniel.kiper@oracle.com>
+Signed-off-by: Krystian Hebel <krystian.hebel@3mdeb.com>
 ---
- grub-core/loader/i386/txt/acmod.c | 575 ++++++++++++++++++++++++++++++
- 1 file changed, 575 insertions(+)
+ grub-core/loader/i386/txt/acmod.c | 590 ++++++++++++++++++++++++++++++
+ 1 file changed, 590 insertions(+)
  create mode 100644 grub-core/loader/i386/txt/acmod.c
 
 diff --git a/grub-core/loader/i386/txt/acmod.c b/grub-core/loader/i386/txt/acmod.c
 new file mode 100644
-index 000000000000..ed2fbab7b0da
+index 000000000000..1611b33d4c96
 --- /dev/null
 +++ b/grub-core/loader/i386/txt/acmod.c
-@@ -0,0 +1,575 @@
+@@ -0,0 +1,590 @@
 +/*
 + * acmod.c: support functions for use of Intel(r) TXT Authenticated
 + *          Code (AC) Modules
@@ -76,6 +77,7 @@ index 000000000000..ed2fbab7b0da
 +#include <grub/err.h>
 +#include <grub/misc.h>
 +#include <grub/types.h>
++#include <grub/safemath.h>
 +#include <grub/dl.h>
 +#include <grub/cpu/relocator.h>
 +#include <grub/i386/cpuid.h>
@@ -83,211 +85,181 @@ index 000000000000..ed2fbab7b0da
 +#include <grub/i386/txt.h>
 +
 +/*
-+ * This checks to see if two numbers multiplied together are larger
-+ *   than the type that they are.  Returns TRUE if OVERFLOWING.
-+ *   If the first parameter "x" is greater than zero and
-+ *   if that is true, that the largest possible value 0xFFFFFFFF / "x"
-+ *   is less than the second parameter "y".  If "y" is zero then
-+ *   it will also fail because no unsigned number is less than zero.
++ * Returns hdr + offset if [offset, offset + count * size) is within the bounds
++ * of the ACM, NULL otherwise.
 + */
-+static inline int
-+multiply_overflow_u32 (grub_uint32_t x, grub_uint32_t y)
++static void*
++n_fit_in_acm (struct grub_txt_acm_header *hdr, grub_uint32_t offset,
++	      grub_uint32_t size, grub_uint32_t count)
 +{
-+  /* Use x instead of (x > 0)? */
-+  return (x > 0) ? ((((grub_uint32_t)(~0))/x) < y) : 0;
++  grub_uint32_t total_size, ret_u32, elem_end;
++  /* ACM size overflow was checked in is_acmod() */
++  grub_uint32_t acm_len = hdr->size * 4;
++
++  /* To simplify rest of the code check if offset is non-0 here */
++  if ( offset == 0 )
++    return NULL;
++
++  if ( grub_mul (size, count, &total_size) )
++    return NULL;
++
++  if ( grub_add (offset, total_size, &elem_end) )
++    return NULL;
++
++  if ( elem_end > acm_len )
++    return NULL;
++
++  if ( grub_add ((grub_uint32_t)(unsigned long)hdr, offset, &ret_u32) )
++    return NULL;
++
++  /* Not checking if (hdr + elem_end) overflows. We know that (hdr + acm_len)
++   * doesn't, and that elem_end <= acm_len. */
++
++  return (void *)(unsigned long)ret_u32;
++}
++
++static void*
++fits_in_acm (struct grub_txt_acm_header *hdr, grub_uint32_t offset,
++	     grub_uint32_t size)
++{
++  return n_fit_in_acm(hdr, offset, size, 1);
 +}
 +
 +/*
-+ *  These three "plus overflow" functions take a "x" value
-+ *    and add the "y" value to it and if the two values are
-+ *    greater than the size of the variable type, they will
-+ *    overflow the type and end up with a smaller value and
-+ *    return TRUE - that they did overflow.  i.e.
++ * Macro that returns value of it->field if it's inside info table, 0 otherwise.
++ * Fields at or below 'length' ('uuid', 'chipset_acm_type', 'version') don't
++ * benefit from this macro, because it requires that 'length' (and by extension
++ * fields below that) is valid.
 + */
-+static inline int plus_overflow_u32 (grub_uint32_t x, grub_uint32_t y)
-+{
-+  return ((((grub_uint32_t)(~0)) - x) < y);
-+}
++#define info_table_offset(it, field)						\
++  (__builtin_offsetof(struct grub_txt_acm_info_table, field) + sizeof(it->field)\
++   <= it->length ? it->field : 0)
 +
++/*
++ * Returns pointer to ACM information table. If the table is located outside of
++ * ACM or its reported size is too small to cover at least 'length' field,
++ * NULL is returned instead.
++ */
 +static struct grub_txt_acm_info_table*
 +get_acmod_info_table (struct grub_txt_acm_header* hdr)
 +{
-+  grub_uint32_t user_area_off;
++  grub_uint32_t user_area_off, info_table_size;
++  struct grub_txt_acm_info_table *ptr = NULL;
++  /* Minimum size required to read full size of table */
++  info_table_size = __builtin_offsetof (struct grub_txt_acm_info_table, length)
++		    + sizeof(ptr->length);
 +
 +  /* Overflow? */
-+  if ( plus_overflow_u32 (hdr->header_len, hdr->scratch_size) )
++  if ( grub_add (hdr->header_len, hdr->scratch_size, &user_area_off) )
 +    {
 +      grub_error (GRUB_ERR_OUT_OF_RANGE, N_("ACM header length plus scratch size overflows"));
 +      return NULL;
 +    }
 +
-+  if ( multiply_overflow_u32 ((hdr->header_len + hdr->scratch_size), 4) )
++  if ( grub_mul (user_area_off, 4, &user_area_off) )
 +    {
 +      grub_error (GRUB_ERR_OUT_OF_RANGE, N_("ACM header length and scratch size in bytes overflows"));
 +      return NULL;
 +    }
 +
-+  /*
-+   * This fn assumes that the ACM has already passed at least the initial
-+   * is_acmod() checks.
-+   */
++  ptr = fits_in_acm(hdr, user_area_off, info_table_size);
 +
-+  user_area_off = (hdr->header_len + hdr->scratch_size) * 4;
-+
-+  /* Overflow? */
-+  if ( plus_overflow_u32 (user_area_off, sizeof(struct grub_txt_acm_info_table)) )
++  if ( ptr != NULL )
 +    {
-+      grub_error (GRUB_ERR_OUT_OF_RANGE, N_("user_area_off plus acm_info_table_t size overflows"));
-+      return NULL;
++      if ( info_table_offset (ptr, length) < info_table_size )
++	return NULL;
++
++      info_table_size = info_table_offset (ptr, length);
++      ptr = fits_in_acm(hdr, user_area_off, info_table_size);
 +    }
 +
-+  /* Check that table is within module. */
-+  if ( user_area_off + sizeof(struct grub_txt_acm_info_table) > hdr->size * 4 )
-+    {
-+      /* TODO: Is (grub_uint32_t) correct??? */
-+      grub_error (GRUB_ERR_OUT_OF_RANGE, N_("ACM info table size too large: %x > %x"),
-+		  user_area_off + (grub_uint32_t)sizeof(struct grub_txt_acm_info_table), hdr->size * 4);
-+      return NULL;
-+    }
-+
-+  /* Overflow? */
-+  if ( plus_overflow_u32 ((grub_uint32_t)(unsigned long)hdr, user_area_off) )
-+    {
-+      grub_error (GRUB_ERR_OUT_OF_RANGE, N_("hdr plus user_area_off overflows"));
-+      return NULL;
-+    }
-+
-+    return (struct grub_txt_acm_info_table *)((unsigned long)hdr + user_area_off);
++  return ptr;
 +}
 +
++/* Function returns pointer to chipset ID list, after checking that
++ * grub_txt_acm_chipset_id_list and all grub_txt_acm_chipset_id structures are
++ * within ACM. Otherwise, NULL is returned. */
 +static struct grub_txt_acm_chipset_id_list*
 +get_acmod_chipset_list (struct grub_txt_acm_header *hdr)
 +{
 +  struct grub_txt_acm_info_table *info_table;
-+  grub_uint32_t size, id_list_off;
++  grub_uint32_t id_entries_off;
 +  struct grub_txt_acm_chipset_id_list *chipset_id_list;
 +
 +  /* This fn assumes that the ACM has already passed the is_acmod() checks */
 +
 +  info_table = get_acmod_info_table (hdr);
-+  if ( !info_table )
-+    return NULL;
-+  id_list_off = info_table->chipset_id_list;
-+
-+  size = hdr->size * 4;
-+
-+  /* Overflow? */
-+  if ( plus_overflow_u32 (id_list_off, sizeof(struct grub_txt_acm_chipset_id)) )
++  if ( info_table == NULL )
 +    {
-+      grub_error (GRUB_ERR_OUT_OF_RANGE, N_("id_list_off plus acm_chipset_id_t size overflows"));
++      grub_error (GRUB_ERR_OUT_OF_RANGE, N_("ACM info table out of bounds"));
 +      return NULL;
 +    }
 +
-+  /* Check that chipset id table is w/in ACM */
-+  if ( id_list_off + sizeof(struct grub_txt_acm_chipset_id) > size )
++  chipset_id_list = fits_in_acm(hdr, info_table_offset (info_table, chipset_id_list),
++				sizeof(struct grub_txt_acm_chipset_id_list));
++  if ( chipset_id_list == NULL )
 +    {
-+      grub_error (GRUB_ERR_OUT_OF_RANGE, N_("chipset id list is too big: %x"), id_list_off);
++      grub_error (GRUB_ERR_OUT_OF_RANGE, N_("ACM chipset ID list out of bounds"));
 +      return NULL;
 +    }
-+
-+  /* Overflow? */
-+  if ( plus_overflow_u32 ((grub_uint32_t)(unsigned long)hdr, id_list_off) )
-+    {
-+      grub_error (GRUB_ERR_OUT_OF_RANGE, N_("hdr plus id_list_off overflows"));
-+      return NULL;
-+    }
-+
-+  chipset_id_list = (struct grub_txt_acm_chipset_id_list*)
-+                    ((unsigned long)hdr + id_list_off);
 +
 +  /* Overflows? */
-+  if ( multiply_overflow_u32 (chipset_id_list->count,
-+                              sizeof(struct grub_txt_acm_chipset_id)) )
++  if ( grub_add (info_table->chipset_id_list,
++		 sizeof(struct grub_txt_acm_chipset_id_list), &id_entries_off))
 +    {
-+      grub_error (GRUB_ERR_OUT_OF_RANGE, N_("size of acm_chipset_id_list overflows"));
++      grub_error (GRUB_ERR_OUT_OF_RANGE, N_("ACM chipset ID entries out of bounds"));
 +      return NULL;
 +    }
 +
-+  if ( plus_overflow_u32 (id_list_off + sizeof(struct grub_txt_acm_chipset_id),
-+        chipset_id_list->count * sizeof(struct grub_txt_acm_chipset_id)) )
++  if ( n_fit_in_acm( hdr, id_entries_off, sizeof(struct grub_txt_acm_chipset_id),
++		      chipset_id_list->count ) == NULL )
 +    {
-+      grub_error (GRUB_ERR_OUT_OF_RANGE, N_("size of all entries overflows"));
-+      return NULL;
-+    }
-+
-+  /* Check that all entries are w/in ACM */
-+  if ( id_list_off + sizeof(struct grub_txt_acm_chipset_id) +
-+       chipset_id_list->count * sizeof(struct grub_txt_acm_chipset_id) > size )
-+    {
-+      grub_error (GRUB_ERR_OUT_OF_RANGE, N_("ACM chipset id entries are too big: %x"),
-+		  chipset_id_list->count);
++      grub_error (GRUB_ERR_OUT_OF_RANGE, N_("ACM chipset ID entries out of bounds"));
 +      return NULL;
 +    }
 +
 +  return chipset_id_list;
 +}
 +
++/* Function returns pointer to processor ID list, after checking that
++ * grub_txt_acm_processor_id_list and all grub_txt_acm_processor_id structures
++ * are within ACM. Otherwise, NULL is returned. */
 +static struct grub_txt_acm_processor_id_list*
 +get_acmod_processor_list (struct grub_txt_acm_header* hdr)
 +{
 +  struct grub_txt_acm_info_table *info_table;
-+  grub_uint32_t size, id_list_off;
++  grub_uint32_t id_entries_off;
 +  struct grub_txt_acm_processor_id_list *proc_id_list;
 +
 +  /* This fn assumes that the ACM has already passed the is_acmod() checks */
 +
 +  info_table = get_acmod_info_table(hdr);
 +  if ( info_table == NULL )
-+    return NULL;
-+  id_list_off = info_table->processor_id_list;
-+
-+  size = hdr->size * 4;
-+
-+  /* Overflow? */
-+  if ( plus_overflow_u32 (id_list_off, sizeof(struct grub_txt_acm_processor_id)) )
 +    {
-+      grub_error (GRUB_ERR_OUT_OF_RANGE, N_("id_list_off plus acm_processor_id_t size overflows"));
++      grub_error (GRUB_ERR_OUT_OF_RANGE, N_("ACM info table out of bounds"));
 +      return NULL;
 +    }
 +
-+  /* Check that processor id table is w/in ACM */
-+  if ( id_list_off + sizeof(struct grub_txt_acm_processor_id) > size )
++  proc_id_list = fits_in_acm(hdr, info_table_offset (info_table, processor_id_list),
++			     sizeof(struct grub_txt_acm_processor_id_list));
++  if ( proc_id_list == NULL )
 +    {
-+      grub_error (GRUB_ERR_OUT_OF_RANGE, N_("ACM processor id list is too big: %x"), id_list_off);
++      grub_error (GRUB_ERR_OUT_OF_RANGE, N_("ACM processor ID list out of bounds"));
 +      return NULL;
 +    }
-+
-+  /* Overflow? */
-+  if ( plus_overflow_u32 ((unsigned long)hdr, id_list_off) )
-+    {
-+      grub_error (GRUB_ERR_OUT_OF_RANGE, N_("hdr plus id_list_off overflows"));
-+      return NULL;
-+    }
-+
-+  proc_id_list = (struct grub_txt_acm_processor_id_list *)
-+                             ((unsigned long)hdr + id_list_off);
 +
 +  /* Overflows? */
-+  if ( multiply_overflow_u32 (proc_id_list->count,
-+             sizeof(struct grub_txt_acm_processor_id)) )
++  if ( grub_add (info_table->processor_id_list,
++		 sizeof(struct grub_txt_acm_processor_id_list), &id_entries_off))
 +    {
-+      grub_error (GRUB_ERR_OUT_OF_RANGE, N_("size of acm_processor_id_list overflows"));
++      grub_error (GRUB_ERR_OUT_OF_RANGE, N_("ACM processor ID entries out of bounds"));
 +      return NULL;
 +    }
 +
-+  if ( plus_overflow_u32 (id_list_off + sizeof(struct grub_txt_acm_processor_id),
-+        proc_id_list->count * sizeof(struct grub_txt_acm_processor_id)) )
++  if ( n_fit_in_acm ( hdr, id_entries_off, sizeof(struct grub_txt_acm_processor_id),
++		     proc_id_list->count ) == NULL )
 +    {
-+      grub_error (GRUB_ERR_OUT_OF_RANGE, N_("size of all entries overflows"));
-+      return NULL;
-+    }
-+
-+  /* Check that all entries are w/in ACM */
-+  if ( id_list_off + sizeof(struct grub_txt_acm_processor_id) +
-+         proc_id_list->count * sizeof(struct grub_txt_acm_processor_id) > size )
-+    {
-+      grub_error (GRUB_ERR_OUT_OF_RANGE, N_("ACM processor id entries are too big: %x"),
-+		  proc_id_list->count);
++      grub_error (GRUB_ERR_OUT_OF_RANGE, N_("ACM chipset ID entries out of bounds"));
 +      return NULL;
 +    }
 +
@@ -300,34 +272,46 @@ index 000000000000..ed2fbab7b0da
 +{
 +  struct grub_txt_acm_header *acm_hdr = (struct grub_txt_acm_header *)acmod_base;
 +  struct grub_txt_acm_info_table *info_table;
++  grub_uint32_t size_from_hdr;
 +
 +  /* First check size */
 +  if ( acmod_size < sizeof (struct grub_txt_acm_header) )
 +    return 0;
 +
 +  /* Then check overflow */
-+  if ( multiply_overflow_u32 (acm_hdr->size, 4) )
++  if ( grub_mul (acm_hdr->size, 4, &size_from_hdr) )
 +    return 0;
 +
 +  /* Then check size equivalency */
-+  if ( acmod_size != acm_hdr->size * 4 )
++  if ( acmod_size != size_from_hdr )
 +    return 0;
 +
-+  /* Then check type and vendor */
++  /* Then check type, sub-type and vendor */
 +  if ( (acm_hdr->module_type != GRUB_TXT_ACM_MODULE_TYPE) ||
++       (acm_hdr->module_sub_type != GRUB_TXT_ACM_MODULE_SUB_TYPE_TXT_ACM) ||
 +       (acm_hdr->module_vendor != GRUB_TXT_ACM_MODULE_VENDOR_INTEL) )
 +    return 0;
 +
 +  info_table = get_acmod_info_table (acm_hdr);
-+  if ( !info_table )
++  if ( info_table == NULL )
 +    return 0;
 +
 +  /* Check if ACM UUID is present */
 +  if ( grub_memcmp (&(info_table->uuid), GRUB_TXT_ACM_UUID, 16) )
 +    return 0;
 +
++  /*
++   * TXT specification doesn't give clear mapping of info table size to version,
++   * so just warn if the size is different than expected but try to use it
++   * anyway. info_table_offset() macro does enough testing to not read outside
++   * of info table.
++   */
++  if ( info_table->length < sizeof(struct grub_txt_acm_info_table) )
++    grub_dprintf ("slaunch", "Info table size (%x) smaller than expected (%x)\n",
++		  info_table->length, sizeof(struct grub_txt_acm_info_table));
++
 +  if ( type_out )
-+    *type_out = info_table->chipset_acm_type;
++    *type_out = info_table_offset (info_table, chipset_acm_type);
 +
 +  return 1;
 +}
@@ -338,11 +322,17 @@ index 000000000000..ed2fbab7b0da
 +  grub_uint8_t *txt_heap = grub_txt_get_heap ();
 +  struct grub_txt_bios_data *bios_data = grub_txt_bios_data_start (txt_heap);
 +  struct grub_txt_acm_header *bios_sinit;
++  grub_uint32_t tmp;
 +
-+  if ( !sinit_region_base )
-+     return NULL;
++  if ( sinit_region_base == NULL )
++    return NULL;
 +
 +  if ( bios_data->bios_sinit_size == 0 )
++    return NULL;
++
++  /* Check if ACM crosses 4G */
++  if ( grub_add ( (unsigned long)sinit_region_base, bios_data->bios_sinit_size,
++                  &tmp) )
 +    return NULL;
 +
 +  /* BIOS has loaded an SINIT module, so verify that it is valid */
@@ -363,13 +353,13 @@ index 000000000000..ed2fbab7b0da
 +{
 +  static struct grub_txt_acm_info_table *info_table;
 +
-+  /* Assumes that it passed is_sinit_acmod() */
++  /* Assumes that it passed grub_txt_is_sinit_acmod() */
 +  info_table = get_acmod_info_table (hdr);
 +
 +  if ( info_table == NULL )
 +    return 0;
 +
-+  return info_table->os_sinit_data_ver;
++  return info_table_offset (info_table, os_sinit_data_ver);
 +}
 +
 +grub_uint32_t
@@ -383,7 +373,7 @@ index 000000000000..ed2fbab7b0da
 +  if ( info_table == NULL || info_table->version < 3 )
 +    return 0;
 +
-+  return info_table->capabilities;
++  return info_table_offset (info_table, capabilities);
 +}
 +
 +int
@@ -400,22 +390,38 @@ index 000000000000..ed2fbab7b0da
 +  return 1;
 +}
 +
-+/* Format of VER.FSBIF and VER.QPIIF registers. */
-+typedef union {
-+  grub_uint64_t _raw;
-+  struct {
-+     grub_uint64_t reserved   : 31;
-+     grub_uint64_t prod_fused : 1;
-+  };
-+} grub_txt_ver_fsbif_qpiif_t;
++static int
++didvid_matches(union grub_txt_didvid didvid,
++	       struct grub_txt_acm_chipset_id *chipset_id)
++{
++  if ( didvid.vid != chipset_id->vendor_id )
++    return 0;
++
++  if ( didvid.did != chipset_id->device_id )
++    return 0;
++
++  /* If RevisionIdMask is 0, the RevisionId field must exactly match the
++   * TXT.DIDVID.RID field. */
++  if ( (chipset_id->flags & GRUB_TXT_ACM_REVISION_ID_MASK) == 0 &&
++       ( didvid.rid == chipset_id->revision_id ) )
++    return 1;
++
++  /* If RevisionIdMask is 1, the RevisionId field is a bitwise mask that can be
++   * used to test for any bits set in the TXT.DIDVID.RID field. If any bits are
++   * set, the RevisionId is a match. */
++  if ( (chipset_id->flags & GRUB_TXT_ACM_REVISION_ID_MASK) != 0 &&
++       ( didvid.rid & chipset_id->revision_id ) != 0 )
++    return 1;
++
++  return 0;
++}
 +
 +int
 +grub_txt_acmod_match_platform (struct grub_txt_acm_header *hdr)
 +{
 +  union grub_txt_didvid didvid;
-+  grub_uint32_t fms, ign, i;
++  grub_uint32_t fms, ign, i, ver;
 +  grub_uint64_t platform_id;
-+  grub_txt_ver_fsbif_qpiif_t ver;
 +  struct grub_txt_acm_chipset_id_list *chipset_id_list;
 +  struct grub_txt_acm_chipset_id *chipset_id;
 +  struct grub_txt_acm_processor_id_list *proc_id_list;
@@ -423,18 +429,21 @@ index 000000000000..ed2fbab7b0da
 +  struct grub_txt_acm_info_table *info_table;
 +
 +  /* This fn assumes that the ACM has already passed the is_acmod() checks */
++  info_table = get_acmod_info_table (hdr);
++  if ( info_table == NULL )
++    return 0;
 +
 +  /* Get chipset fusing, device, and vendor id info */
 +  didvid.value = grub_txt_reg_pub_readq (GRUB_TXT_DIDVID);
 +
-+  ver._raw = grub_txt_reg_pub_readq (GRUB_TXT_VER_FSBIF);
-+  if ( (ver._raw & 0xffffffff) == 0xffffffff ||
-+       (ver._raw & 0xffffffff) == 0x00 ) /* Need to use VER.QPIIF */
-+    ver._raw = grub_txt_reg_pub_readq (GRUB_TXT_VER_QPIIF);
++  ver = grub_txt_reg_pub_readl (GRUB_TXT_VER_FSBIF);
++  if ( ver == 0xffffffff || ver == 0x00 ) /* Need to use VER.QPIIF */
++    ver = grub_txt_reg_pub_readl (GRUB_TXT_VER_QPIIF);
 +
-+  grub_dprintf ("slaunch", "chipset production fused: %x, "
++  grub_dprintf ("slaunch", "chipset production fused: %s, "
 +		"chipset vendor: 0x%x, device: 0x%x, revision: 0x%x\n",
-+		ver.prod_fused, didvid.vid, didvid.did, didvid.rid);
++		(ver & GRUB_TXT_VERSION_PROD_FUSED) ? "yes" : "no" , didvid.vid,
++		didvid.did, didvid.rid);
 +
 +  grub_cpuid (1, fms, ign, ign, ign);
 +  platform_id = grub_rdmsr (GRUB_MSR_X86_PLATFORM_ID);
@@ -446,8 +455,8 @@ index 000000000000..ed2fbab7b0da
 +   * Check if chipset fusing is same. Note the DEBUG.FUSE bit in the version
 +   * is 0 when debug fused so the logic below checking a mismatch is valid.
 +   */
-+  if ( (ver._raw & GRUB_TXT_VERSION_DEBUG_FUSED) &&
-+       (hdr->flags & GRUB_TXT_ACM_FLAG_DEBUG_SIGNED) )
++  if ( !!(ver & GRUB_TXT_VERSION_PROD_FUSED) ==
++       !!(hdr->flags & GRUB_TXT_ACM_FLAG_DEBUG_SIGNED) )
 +    {
 +      grub_error (GRUB_ERR_BAD_DEVICE, N_("production/debug mismatch between chipset and ACM"));
 +      return 0;
@@ -455,7 +464,7 @@ index 000000000000..ed2fbab7b0da
 +
 +  /* Check if chipset vendor/device/revision IDs match */
 +  chipset_id_list = get_acmod_chipset_list (hdr);
-+  if ( !chipset_id_list )
++  if ( chipset_id_list == NULL )
 +    return 0;
 +
 +  grub_dprintf ("slaunch", "%d SINIT ACM chipset id entries:\n", chipset_id_list->count);
@@ -468,36 +477,43 @@ index 000000000000..ed2fbab7b0da
 +		    chipset_id->device_id, chipset_id->flags,
 +		    chipset_id->revision_id, chipset_id->extended_id);
 +
-+      if ( (didvid.vid == chipset_id->vendor_id ) &&
-+           (didvid.did == chipset_id->device_id ) &&
-+           ( ( ( (chipset_id->flags & GRUB_TXT_ACM_REVISION_ID_MASK) == 0) &&
-+                 (didvid.rid == chipset_id->revision_id) ) ||
-+               ( ( (chipset_id->flags & GRUB_TXT_ACM_REVISION_ID_MASK) == 1) &&
-+                 ( (didvid.rid & chipset_id->revision_id) != 0 ) ) ) )
-+            break;
++      if ( didvid_matches ( didvid, chipset_id) )
++	break;
 +    }
 +
 +  if ( i >= chipset_id_list->count )
 +    {
-+      grub_error (GRUB_ERR_BAD_DEVICE, N_("chipset id mismatch"));
++      /*
++       * Version 9 introduces flexible ACM information table format, not yet
++       * supported by this code.
++       *
++       * TXT spec says that 9 will be the final version and further changes will
++       * be reflected elsewhere, but check for higher values too in case they
++       * change their mind.
++       */
++      if ( info_table->version >= 9 )
++	grub_error (GRUB_ERR_NOT_IMPLEMENTED_YET,
++		    N_("chipset id mismatch, flexible ACM info list may contain"
++		       " matching entry but it isn't yet supported by code"));
++      else
++	grub_error (GRUB_ERR_BAD_DEVICE, N_("chipset id mismatch"));
++
 +      return 0;
 +    }
 +
-+  /* Check if processor family/model/stepping and platform IDs match */
-+  info_table = get_acmod_info_table (hdr);
-+  if ( !info_table )
-+    return 0;
-+
 +  /*
-+   * Logic inverted from oringal to avoid the if block. Not sure what drives
-+   * the logic of not checking processor infrmation for version 4 or less.
++   * Unfortunately the spec isn't too clear on what the changes to the info
++   * table were, across the different versions, but an old version of the entire
++   * spec document shows that the processor table field didn't exist when the
++   * latest version of the info table was 3.
 +   */
 +  if ( info_table->version < 4 )
 +    return 1;
 +
++  /* Check if processor family/model/stepping and platform IDs match */
 +  proc_id_list = get_acmod_processor_list(hdr);
-+  if ( !proc_id_list )
-+    return 1;
++  if ( proc_id_list == NULL )
++    return 0;
 +
 +  grub_dprintf ("slaunch", "%d SINIT ACM processor id entries:\n", proc_id_list->count);
 +
@@ -515,7 +531,7 @@ index 000000000000..ed2fbab7b0da
 +
 +  if ( i >= proc_id_list->count )
 +    {
-+      grub_error (GRUB_ERR_BAD_DEVICE, N_("chipset id mismatch"));
++      grub_error (GRUB_ERR_BAD_DEVICE, N_("processor id mismatch"));
 +      return 0;
 +    }
 +
@@ -527,10 +543,10 @@ index 000000000000..ed2fbab7b0da
 +{
 +  struct grub_txt_acm_header *bios_sinit;
 +  void *sinit_region_base;
-+  grub_uint32_t sinit_region_size;
++  grub_uint32_t sinit_size, sinit_region_size;
 +
-+  sinit_region_base = (void *)(grub_addr_t) grub_txt_reg_pub_readq (GRUB_TXT_SINIT_BASE);
-+  sinit_region_size = (grub_uint32_t) grub_txt_reg_pub_readq (GRUB_TXT_SINIT_SIZE);
++  sinit_region_base = (void *)(grub_addr_t) grub_txt_reg_pub_readl (GRUB_TXT_SINIT_BASE);
++  sinit_region_size = (grub_uint32_t) grub_txt_reg_pub_readl (GRUB_TXT_SINIT_SIZE);
 +
 +  grub_dprintf ("slaunch", "TXT.SINIT.BASE: %p\nTXT.SINIT.SIZE: 0x%"
 +		PRIxGRUB_UINT32_T "\n", sinit_region_base, sinit_region_size);
@@ -573,21 +589,21 @@ index 000000000000..ed2fbab7b0da
 +
 +  /* Our SINIT ACM is newer than BIOS one or BIOS does not have one. */
 +
-+  if (multiply_overflow_u32 (sinit->size, 4))
++  if (grub_mul (sinit->size, 4, &sinit_size))
 +    {
 +      grub_error (GRUB_ERR_OUT_OF_RANGE, N_("SINIT ACM size in bytes overflows"));
 +      return NULL;
 +    }
 +
-+  if ((sinit->size * 4) > sinit_region_size)
++  if (sinit_size > sinit_region_size)
 +    {
 +      grub_error (GRUB_ERR_OUT_OF_MEMORY,
 +		  N_("SINIT ACM does not fit into final resting place: 0x%"
-+		  PRIxGRUB_UINT32_T "\n"), sinit->size * 4);
++		  PRIxGRUB_UINT32_T "\n"), sinit_size);
 +      return NULL;
 +    }
 +
-+  grub_memcpy (sinit_region_base, sinit, sinit->size * 4);
++  grub_memcpy (sinit_region_base, sinit, sinit_size);
 +
 +  return sinit_region_base;
 +}
