@@ -1,4 +1,4 @@
-From 340094ad2af892ef538baacf84dbd5d4256056de Mon Sep 17 00:00:00 2001
+From 2c11b659b5272369f93386c50fc23875c0b753d8 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Micha=C5=82=20=C5=BBygowski?= <michal.zygowski@3mdeb.com>
 Date: Thu, 1 Sep 2022 17:57:46 +0200
 Subject: [PATCH] slaunch: Make slparams accessible by other modules
@@ -14,10 +14,10 @@ Signed-off-by: Michał Żygowski <michal.zygowski@3mdeb.com>
  3 files changed, 40 insertions(+), 29 deletions(-)
 
 diff --git a/grub-core/loader/i386/linux.c b/grub-core/loader/i386/linux.c
-index bc8d511bd6dd..b8611e1adebb 100644
+index 7ef4b36fefc7..3c123b90a0ea 100644
 --- a/grub-core/loader/i386/linux.c
 +++ b/grub-core/loader/i386/linux.c
-@@ -89,7 +89,6 @@ static grub_efi_uintn_t efi_mmap_size;
+@@ -90,7 +90,6 @@ static grub_efi_uintn_t efi_mmap_size;
  #else
  static const grub_size_t efi_mmap_size = 0;
  #endif
@@ -25,7 +25,7 @@ index bc8d511bd6dd..b8611e1adebb 100644
  
  /* FIXME */
  #if 0
-@@ -161,6 +160,7 @@ allocate_pages (grub_size_t prot_size, grub_size_t *align,
+@@ -162,6 +161,7 @@ allocate_pages (grub_size_t prot_size, grub_size_t *align,
  {
    grub_err_t err;
    grub_size_t total_size;
@@ -33,7 +33,7 @@ index bc8d511bd6dd..b8611e1adebb 100644
  
    if (prot_size == 0)
      prot_size = 1;
-@@ -175,20 +175,20 @@ allocate_pages (grub_size_t prot_size, grub_size_t *align,
+@@ -176,20 +176,20 @@ allocate_pages (grub_size_t prot_size, grub_size_t *align,
  	  goto fail;
  	}
  
@@ -60,7 +60,7 @@ index bc8d511bd6dd..b8611e1adebb 100644
  
    /* Initialize the memory pointers with NULL for convenience.  */
    free_pages ();
-@@ -239,18 +239,18 @@ allocate_pages (grub_size_t prot_size, grub_size_t *align,
+@@ -240,18 +240,18 @@ allocate_pages (grub_size_t prot_size, grub_size_t *align,
  	/* Zero out memory to get stable MLE measurements. */
  	grub_memset (prot_mode_mem, 0, total_size);
  
@@ -87,7 +87,7 @@ index bc8d511bd6dd..b8611e1adebb 100644
  
  	if (grub_relocator_alloc_chunk_align (relocator, &ch, 0x1000000,
  					      0xffffffff - GRUB_SLAUNCH_TPM_EVT_LOG_SIZE,
-@@ -258,15 +258,15 @@ allocate_pages (grub_size_t prot_size, grub_size_t *align,
+@@ -259,15 +259,15 @@ allocate_pages (grub_size_t prot_size, grub_size_t *align,
  					      GRUB_RELOCATOR_PREFERENCE_NONE, 1))
  	  goto fail;
  
@@ -108,7 +108,7 @@ index bc8d511bd6dd..b8611e1adebb 100644
        }
    }
  
-@@ -481,6 +481,7 @@ grub_linux_boot (void)
+@@ -482,6 +482,7 @@ grub_linux_boot (void)
    grub_size_t mmap_size;
    grub_size_t cl_offset;
    grub_size_t ap_wake_block_size = 0;
@@ -116,7 +116,7 @@ index bc8d511bd6dd..b8611e1adebb 100644
  
  #ifdef GRUB_MACHINE_IEEE1275
    {
-@@ -636,12 +637,12 @@ grub_linux_boot (void)
+@@ -637,12 +638,12 @@ grub_linux_boot (void)
  
    if (grub_slaunch_platform_type () == SLP_INTEL_TXT)
      {
@@ -132,7 +132,7 @@ index bc8d511bd6dd..b8611e1adebb 100644
  		    (unsigned long) ap_wake_block_size);
      }
  
-@@ -712,17 +713,17 @@ grub_linux_boot (void)
+@@ -713,17 +714,17 @@ grub_linux_boot (void)
  
    if (state.edi == SLP_INTEL_TXT)
      {
@@ -154,7 +154,7 @@ index bc8d511bd6dd..b8611e1adebb 100644
        state.edx = 0;
      }
    else
-@@ -761,6 +762,7 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
+@@ -762,6 +763,7 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
    grub_size_t align, min_align;
    int relocatable;
    grub_uint64_t preferred_address = GRUB_LINUX_BZIMAGE_ADDR;
@@ -162,7 +162,7 @@ index bc8d511bd6dd..b8611e1adebb 100644
  
    grub_dl_ref (my_mod);
  
-@@ -880,7 +882,7 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
+@@ -881,7 +883,7 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
    grub_memset (&linux_params, 0, sizeof (linux_params));
  
    if (grub_slaunch_platform_type () == SLP_INTEL_TXT)
@@ -171,7 +171,7 @@ index bc8d511bd6dd..b8611e1adebb 100644
  
    /*
     * The Linux 32-bit boot protocol defines the setup header end
-@@ -968,7 +970,7 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
+@@ -969,7 +971,7 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
  	      goto fail;
  	    }
  

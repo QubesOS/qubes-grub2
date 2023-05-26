@@ -1,4 +1,4 @@
-From 33c31aa22cab2841aa9d4f9578f61a926c30eb8e Mon Sep 17 00:00:00 2001
+From 1d08644f2c341b472ea9db94de746b3030a5f1c3 Mon Sep 17 00:00:00 2001
 From: Ross Philipson <ross.philipson@oracle.com>
 Date: Wed, 7 Aug 2019 13:50:14 -0400
 Subject: [PATCH] i386/slaunch: Add basic platform support for secure launch
@@ -250,7 +250,7 @@ index 000000000000..b5bce71ef8d6
 +
 +#endif /* GRUB_I386_MMIO_H */
 diff --git a/include/grub/i386/msr.h b/include/grub/i386/msr.h
-index 1e838c022f41..f2552ecbc6d4 100644
+index 1e838c022f41..b99c49f002ee 100644
 --- a/include/grub/i386/msr.h
 +++ b/include/grub/i386/msr.h
 @@ -2,6 +2,9 @@
@@ -306,7 +306,7 @@ index 1e838c022f41..f2552ecbc6d4 100644
 +#define GRUB_MSR_X86_EFER		0xc0000080 /* Extended features  */
 +#define GRUB_MSR_EFER_LME		(1<<8)     /* Enable Long Mode/IA-32e  */
 +#define GRUB_MSR_EFER_LMA		(1<<10)    /* Long Mode/IA-32e Actuve  */
-+#define GRUB_MSR_EFER_SVME		(1<<12)    /* Enable virtualization  */
++#define GRUB_MSR_EFER_SVME		(1<<12)    /* Enable SVM (AMD-V)  */
 +
 +/* AMD Specific */
 +#define GRUB_MSR_AMD64_PATCH_LEVEL	0x0000008b

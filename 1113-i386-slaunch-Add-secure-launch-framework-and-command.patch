@@ -1,4 +1,4 @@
-From a01e6982379c8f1850bf3c1877568442bc8d6c76 Mon Sep 17 00:00:00 2001
+From 98069630b28f8345d791bb68102d4e28789e8670 Mon Sep 17 00:00:00 2001
 From: Ross Philipson <ross.philipson@oracle.com>
 Date: Wed, 7 Aug 2019 15:01:00 -0400
 Subject: [PATCH] i386/slaunch: Add secure launch framework and commands
@@ -12,7 +12,7 @@ Signed-off-by: Krystian Hebel <krystian.hebel@3mdeb.com>
  grub-core/lib/i386/relocator32.S             |   8 +
  grub-core/loader/i386/bsd.c                  |   7 +
  grub-core/loader/i386/coreboot/chainloader.c |   2 +
- grub-core/loader/i386/linux.c                | 213 +++++++++++++++++--
+ grub-core/loader/i386/linux.c                | 214 +++++++++++++++++--
  grub-core/loader/i386/pc/plan9.c             |   3 +-
  grub-core/loader/i386/slaunch.c              | 201 +++++++++++++++++
  grub-core/loader/i386/xnu.c                  |   3 +
@@ -20,7 +20,7 @@ Signed-off-by: Krystian Hebel <krystian.hebel@3mdeb.com>
  include/grub/file.h                          |   3 +
  include/grub/i386/linux.h                    |  14 +-
  include/grub/i386/slaunch.h                  |  57 +++++
- 13 files changed, 517 insertions(+), 17 deletions(-)
+ 13 files changed, 518 insertions(+), 17 deletions(-)
  create mode 100644 grub-core/loader/i386/slaunch.c
  create mode 100644 include/grub/i386/slaunch.h
 
@@ -176,7 +176,7 @@ index 0a19ebb9c3e5..dccd86b07bde 100644
  }
  
 diff --git a/grub-core/loader/i386/linux.c b/grub-core/loader/i386/linux.c
-index 9f74a96b19ae..ba050de2d1df 100644
+index 9f74a96b19ae..0ab2899f6774 100644
 --- a/grub-core/loader/i386/linux.c
 +++ b/grub-core/loader/i386/linux.c
 @@ -34,6 +34,8 @@
@@ -188,10 +188,11 @@ index 9f74a96b19ae..ba050de2d1df 100644
  #include <grub/linux.h>
  #include <grub/machine/kernel.h>
  #include <grub/safemath.h>
-@@ -63,18 +65,23 @@ GRUB_MOD_LICENSE ("GPLv3+");
+@@ -63,18 +65,24 @@ GRUB_MOD_LICENSE ("GPLv3+");
  #define ACCEPTS_PURE_TEXT 1
  #endif
  
++/* See kernel_info in Documentation/arch/x86/boot.rst in the kernel tree */
 +#define KERNEL_INFO_HEADER		"LToP"
 +#define KERNEL_INFO_MIN_SIZE_TOTAL	12
 +
@@ -212,7 +213,7 @@ index 9f74a96b19ae..ba050de2d1df 100644
  static struct linux_kernel_params linux_params;
  static char *linux_cmdline;
  #ifdef GRUB_MACHINE_EFI
-@@ -82,6 +89,7 @@ static grub_efi_uintn_t efi_mmap_size;
+@@ -82,6 +90,7 @@ static grub_efi_uintn_t efi_mmap_size;
  #else
  static const grub_size_t efi_mmap_size = 0;
  #endif
@@ -220,7 +221,7 @@ index 9f74a96b19ae..ba050de2d1df 100644
  
  /* FIXME */
  #if 0
-@@ -98,6 +106,8 @@ static struct idt_descriptor idt_desc =
+@@ -98,6 +107,8 @@ static struct idt_descriptor idt_desc =
    };
  #endif
  
@@ -229,7 +230,7 @@ index 9f74a96b19ae..ba050de2d1df 100644
  static inline grub_size_t
  page_align (grub_size_t size)
  {
-@@ -150,11 +160,35 @@ allocate_pages (grub_size_t prot_size, grub_size_t *align,
+@@ -150,11 +161,35 @@ allocate_pages (grub_size_t prot_size, grub_size_t *align,
  		grub_uint64_t preferred_address)
  {
    grub_err_t err;
@@ -266,7 +267,7 @@ index 9f74a96b19ae..ba050de2d1df 100644
  
    /* Initialize the memory pointers with NULL for convenience.  */
    free_pages ();
-@@ -176,7 +210,7 @@ allocate_pages (grub_size_t prot_size, grub_size_t *align,
+@@ -176,7 +211,7 @@ allocate_pages (grub_size_t prot_size, grub_size_t *align,
  	err = grub_relocator_alloc_chunk_align (relocator, &ch,
  						preferred_address,
  						preferred_address,
@@ -275,7 +276,7 @@ index 9f74a96b19ae..ba050de2d1df 100644
  						GRUB_RELOCATOR_PREFERENCE_LOW,
  						1);
  	for (; err && *align + 1 > min_align; (*align)--)
-@@ -194,11 +228,45 @@ allocate_pages (grub_size_t prot_size, grub_size_t *align,
+@@ -194,11 +229,45 @@ allocate_pages (grub_size_t prot_size, grub_size_t *align,
      else
        err = grub_relocator_alloc_chunk_addr (relocator, &ch,
  					     preferred_address,
@@ -322,7 +323,7 @@ index 9f74a96b19ae..ba050de2d1df 100644
    }
  
    grub_dprintf ("linux", "prot_mode_mem = %p, prot_mode_target = %lx, prot_size = %x\n",
-@@ -286,7 +354,7 @@ grub_linux_setup_video (struct linux_kernel_params *params)
+@@ -286,7 +355,7 @@ grub_linux_setup_video (struct linux_kernel_params *params)
  	  params->lfb_size >>= 16;
  	  params->have_vga = GRUB_VIDEO_LINUX_TYPE_VESA;
  	  break;
@@ -331,7 +332,7 @@ index 9f74a96b19ae..ba050de2d1df 100644
  	case GRUB_VIDEO_DRIVER_EFI_UGA:
  	case GRUB_VIDEO_DRIVER_EFI_GOP:
  	  params->have_vga = GRUB_VIDEO_LINUX_TYPE_EFIFB;
-@@ -411,6 +479,7 @@ grub_linux_boot (void)
+@@ -411,6 +480,7 @@ grub_linux_boot (void)
    };
    grub_size_t mmap_size;
    grub_size_t cl_offset;
@@ -339,7 +340,7 @@ index 9f74a96b19ae..ba050de2d1df 100644
  
  #ifdef GRUB_MACHINE_IEEE1275
    {
-@@ -543,6 +612,9 @@ grub_linux_boot (void)
+@@ -543,6 +613,9 @@ grub_linux_boot (void)
  		(unsigned) ctx.real_size,
  		(unsigned) efi_mmap_size);
  
@@ -349,7 +350,7 @@ index 9f74a96b19ae..ba050de2d1df 100644
    if (! ctx.real_mode_target)
      return grub_error (GRUB_ERR_OUT_OF_MEMORY, "cannot allocate real mode pages");
  
-@@ -550,7 +622,7 @@ grub_linux_boot (void)
+@@ -550,7 +623,7 @@ grub_linux_boot (void)
      grub_relocator_chunk_t ch;
      grub_size_t sz;
  
@@ -358,7 +359,7 @@ index 9f74a96b19ae..ba050de2d1df 100644
        return GRUB_ERR_OUT_OF_RANGE;
  
      err = grub_relocator_alloc_chunk_addr (relocator, &ch,
-@@ -561,6 +633,17 @@ grub_linux_boot (void)
+@@ -561,6 +634,17 @@ grub_linux_boot (void)
    }
    efi_mmap_buf = (grub_uint8_t *) real_mode_mem + ctx.real_size;
  
@@ -376,7 +377,7 @@ index 9f74a96b19ae..ba050de2d1df 100644
    grub_dprintf ("linux", "real_mode_mem = %p\n",
                  real_mode_mem);
  
-@@ -591,9 +674,9 @@ grub_linux_boot (void)
+@@ -591,9 +675,9 @@ grub_linux_boot (void)
  					 &efi_desc_size, &efi_desc_version);
      if (err)
        return err;
@@ -388,7 +389,7 @@ index 9f74a96b19ae..ba050de2d1df 100644
        + ((grub_uint8_t *) efi_mmap_buf - (grub_uint8_t *) real_mode_mem);
      /* Pass EFI parameters.  */
      if (grub_le_to_cpu16 (ctx.params->version) >= 0x0208)
-@@ -624,12 +707,33 @@ grub_linux_boot (void)
+@@ -624,12 +708,33 @@ grub_linux_boot (void)
    }
  #endif
  
@@ -428,7 +429,7 @@ index 9f74a96b19ae..ba050de2d1df 100644
    return grub_relocator32_boot (relocator, state, 0);
  }
  
-@@ -650,7 +754,7 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
+@@ -650,7 +755,7 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
    grub_file_t file = 0;
    struct linux_i386_kernel_header lh;
    grub_uint8_t setup_sects;
@@ -437,7 +438,7 @@ index 9f74a96b19ae..ba050de2d1df 100644
    grub_ssize_t len;
    int i;
    grub_size_t align, min_align;
-@@ -743,7 +847,7 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
+@@ -743,7 +848,7 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
        align = 0;
        relocatable = 0;
      }
@@ -446,7 +447,7 @@ index 9f74a96b19ae..ba050de2d1df 100644
    if (grub_le_to_cpu16 (lh.version) >= 0x020a)
      {
        min_align = lh.min_alignment;
-@@ -760,6 +864,13 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
+@@ -760,6 +865,13 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
        prot_init_space = page_align (prot_size) * 3;
      }
  
@@ -460,7 +461,7 @@ index 9f74a96b19ae..ba050de2d1df 100644
    if (allocate_pages (prot_size, &align,
  		      min_align, relocatable,
  		      preferred_address))
-@@ -767,6 +878,9 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
+@@ -767,6 +879,9 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
  
    grub_memset (&linux_params, 0, sizeof (linux_params));
  
@@ -470,7 +471,7 @@ index 9f74a96b19ae..ba050de2d1df 100644
    /*
     * The Linux 32-bit boot protocol defines the setup header end
     * to be at 0x202 + the byte value at 0x201.
-@@ -793,6 +907,75 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
+@@ -793,6 +908,75 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
        goto fail;
      }
  

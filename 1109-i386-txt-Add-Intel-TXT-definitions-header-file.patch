@@ -1,4 +1,4 @@
-From 8e91862df3df4072b2f8ad7ef28884da6c4a5e6a Mon Sep 17 00:00:00 2001
+From 87a1423e0129ba92eb4ef8d626156067333cbed3 Mon Sep 17 00:00:00 2001
 From: Ross Philipson <ross.philipson@oracle.com>
 Date: Wed, 7 Aug 2019 13:53:06 -0400
 Subject: [PATCH] i386/txt: Add Intel TXT definitions header file

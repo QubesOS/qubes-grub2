@@ -1,4 +1,4 @@
-From b85ff5887e756890011ed8c00ab56c3fefdbc224 Mon Sep 17 00:00:00 2001
+From 4d48d3bc4fe7ac5dae6f32de2928a803c2dfb770 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Micha=C5=82=20=C5=BBygowski?= <michal.zygowski@3mdeb.com>
 Date: Thu, 1 Sep 2022 17:58:53 +0200
 Subject: [PATCH] multiboot2: Implement TXT slaunch support
@@ -10,14 +10,14 @@ Signed-off-by: Michał Żygowski <michal.zygowski@3mdeb.com>
 Signed-off-by: Tomasz Żyjewski <tomasz.zyjewski@3mdeb.com>
 Signed-off-by: Krystian Hebel <krystian.hebel@3mdeb.com>
 ---
- grub-core/loader/multiboot.c       |  19 +++++-
+ grub-core/loader/multiboot.c       |  22 ++++++-
  grub-core/loader/multiboot_elfxx.c | 102 ++++++++++++++++++++++++++---
  grub-core/loader/multiboot_mbi2.c  |  39 +++++++++++
  include/grub/i386/txt.h            |   1 +
- 4 files changed, 152 insertions(+), 9 deletions(-)
+ 4 files changed, 155 insertions(+), 9 deletions(-)
 
 diff --git a/grub-core/loader/multiboot.c b/grub-core/loader/multiboot.c
-index 3ab0c828c3ae..eb2da8546d9a 100644
+index 3ab0c828c3ae..049efd04c649 100644
 --- a/grub-core/loader/multiboot.c
 +++ b/grub-core/loader/multiboot.c
 @@ -52,6 +52,7 @@
@@ -28,7 +28,7 @@ index 3ab0c828c3ae..eb2da8546d9a 100644
  #endif
  
  GRUB_MOD_LICENSE ("GPLv3+");
-@@ -164,7 +165,23 @@ efi_boot (struct grub_relocator *rel __attribute__ ((unused)),
+@@ -164,7 +165,26 @@ efi_boot (struct grub_relocator *rel __attribute__ ((unused)),
  static void
  normal_boot (struct grub_relocator *rel, struct grub_relocator32_state state)
  {
@@ -42,7 +42,10 @@ index 3ab0c828c3ae..eb2da8546d9a 100644
 +      err = grub_txt_boot_prepare (slparams);
 +
 +      if (err != GRUB_ERR_NONE)
-+	return;
++	{
++	  grub_printf ("TXT boot preparation failed");
++	  return;
++	}
 +
 +      /* Configure relocator GETSEC[SENTER] call. */
 +      state.eax = GRUB_SMX_LEAF_SENTER;

@@ -1,4 +1,4 @@
-From 38bf9bedd60fff65aa8402432ed05d7ed27d07c0 Mon Sep 17 00:00:00 2001
+From cd6bee1ce1385df0902a0e30b949a4e6dfc5f3c6 Mon Sep 17 00:00:00 2001
 From: Ross Philipson <ross.philipson@oracle.com>
 Date: Wed, 7 Aug 2019 13:57:33 -0400
 Subject: [PATCH] i386/txt: Add Intel TXT core implementation
@@ -11,19 +11,19 @@ Signed-off-by: Daniel Kiper <daniel.kiper@oracle.com>
 Signed-off-by: Michał Żygowski <michal.zygowski@3mdeb.com>
 Signed-off-by: Krystian Hebel <krystian.hebel@3mdeb.com>
 ---
- grub-core/loader/i386/txt/txt.c | 914 ++++++++++++++++++++++++++++++++
+ grub-core/loader/i386/txt/txt.c | 928 ++++++++++++++++++++++++++++++++
  include/grub/i386/memory.h      |   5 +
  include/grub/i386/msr.h         |   1 +
  include/grub/i386/txt.h         |  18 +-
- 4 files changed, 935 insertions(+), 3 deletions(-)
+ 4 files changed, 949 insertions(+), 3 deletions(-)
  create mode 100644 grub-core/loader/i386/txt/txt.c
 
 diff --git a/grub-core/loader/i386/txt/txt.c b/grub-core/loader/i386/txt/txt.c
 new file mode 100644
-index 000000000000..9540719990bd
+index 000000000000..18eb4fd1bf15
 --- /dev/null
 +++ b/grub-core/loader/i386/txt/txt.c
-@@ -0,0 +1,914 @@
+@@ -0,0 +1,928 @@
 +/*
 + * txt.c: Intel(r) TXT support functions, including initiating measured
 + *        launch, post-launch, AP wakeup, etc.
@@ -110,7 +110,10 @@ index 000000000000..9540719990bd
 +    {
 +      grub_dprintf ("slaunch", "Firmware didn't lock FEATURE_CONTROL MSR,"
 +		    "locking it now\n");
-+      feat_ctrl |= GRUB_MSR_X86_FEATURE_CTRL_LOCK;
++      /* Not setting SENTER_FUNCTIONS and SENTER_ENABLE because they were tested
++       * in grub_txt_verify_platform() */
++      feat_ctrl |= GRUB_MSR_X86_FEATURE_CTRL_LOCK | GRUB_MSR_X86_ENABLE_VMX_IN_SMX;
++      grub_wrmsr (GRUB_MSR_X86_FEATURE_CONTROL, feat_ctrl);
 +    }
 +
 +  /* Enable SMX mode. */
@@ -605,7 +608,7 @@ index 000000000000..9540719990bd
 +  rsdp = grub_acpi_get_rsdpv2 ();
 +
 +  if (rsdp == NULL)
-+    return grub_printf ("WARNING: ACPI RSDP 2.0 missing\n");
++    return grub_error (GRUB_ERR_BAD_DEVICE, N_("ACPI RSDP 2.0 missing\n"));
 +
 +  os_sinit_data->efi_rsdt_ptr = (grub_uint64_t)(grub_addr_t) rsdp;
 +#endif
@@ -652,7 +655,8 @@ index 000000000000..9540719990bd
 +    os_sinit_data->capabilities |= GRUB_TXT_CAPS_ECX_PT_SUPPORT;
 +
 +  if (grub_get_tpm_ver () == GRUB_TPM_12)
-+    return grub_error (GRUB_ERR_BAD_DEVICE, N_("TPM 1.2 is not supported"));
++    return grub_error (GRUB_ERR_NOT_IMPLEMENTED_YET,
++		       N_("TPM 1.2 detected, but not implemented yet"));
 +  else
 +    {
 +      if (!(sinit_caps & GRUB_TXT_CAPS_TPM_20_EVTLOG_SUPPORT))
@@ -896,6 +900,7 @@ index 000000000000..9540719990bd
 +  grub_err_t err;
 +  struct grub_txt_mle_header *mle_header;
 +  struct grub_txt_acm_header *sinit_base;
++  int i;
 +
 +  sinit_base = grub_txt_sinit_select (grub_slaunch_module ());
 +
@@ -918,8 +923,17 @@ index 000000000000..9540719990bd
 +  slparams->sinit_acm_base = (grub_uint32_t)(grub_addr_t) sinit_base;
 +  slparams->sinit_acm_size = sinit_base->size * 4;
 +
-+  grub_tpm_relinquish_locality (0);
-+  grub_dprintf ("slaunch", "TPM locality reliquished\n");
++  /*
++   * Access to locality 4 isn't available to software, skip it. Don't bother
++   * checking TPM status, we have no tools for recovering from bad state better
++   * than command abort, which is part of locality relinquish. Write performed
++   * by the following function is no-op if locality is neither active nor
++   * requested.
++   */
++  for (i = 0; i < 4; ++i)
++    grub_tpm_relinquish_locality (i);
++
++  grub_dprintf ("slaunch", "TPM localities relinquished\n");
 +
 +  err = set_mtrrs_for_acmod (sinit_base);
 +  if (err)
@@ -964,7 +978,7 @@ index c64529630f19..56f64855be7e 100644
  {
    grub_uint64_t addr;
 diff --git a/include/grub/i386/msr.h b/include/grub/i386/msr.h
-index f2552ecbc6d4..99e2c6f675b3 100644
+index b99c49f002ee..8f3e2a894883 100644
 --- a/include/grub/i386/msr.h
 +++ b/include/grub/i386/msr.h
 @@ -31,6 +31,7 @@

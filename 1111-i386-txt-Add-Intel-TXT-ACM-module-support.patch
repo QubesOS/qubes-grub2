@@ -1,4 +1,4 @@
-From b04efb5f9dfd96bc290109ddb6170822bc55dd6b Mon Sep 17 00:00:00 2001
+From 59ba16b5bc65ff8b91f4ed627fc7286717fce6dc Mon Sep 17 00:00:00 2001
 From: Ross Philipson <ross.philipson@oracle.com>
 Date: Wed, 7 Aug 2019 13:59:18 -0400
 Subject: [PATCH] i386/txt: Add Intel TXT ACM module support
@@ -7,16 +7,16 @@ Signed-off-by: Ross Philipson <ross.philipson@oracle.com>
 Signed-off-by: Daniel Kiper <daniel.kiper@oracle.com>
 Signed-off-by: Krystian Hebel <krystian.hebel@3mdeb.com>
 ---
- grub-core/loader/i386/txt/acmod.c | 590 ++++++++++++++++++++++++++++++
- 1 file changed, 590 insertions(+)
+ grub-core/loader/i386/txt/acmod.c | 603 ++++++++++++++++++++++++++++++
+ 1 file changed, 603 insertions(+)
  create mode 100644 grub-core/loader/i386/txt/acmod.c
 
 diff --git a/grub-core/loader/i386/txt/acmod.c b/grub-core/loader/i386/txt/acmod.c
 new file mode 100644
-index 000000000000..1611b33d4c96
+index 000000000000..ec61d277d9f7
 --- /dev/null
 +++ b/grub-core/loader/i386/txt/acmod.c
-@@ -0,0 +1,590 @@
+@@ -0,0 +1,603 @@
 +/*
 + * acmod.c: support functions for use of Intel(r) TXT Authenticated
 + *          Code (AC) Modules
@@ -85,6 +85,16 @@ index 000000000000..1611b33d4c96
 +#include <grub/i386/txt.h>
 +
 +/*
++ * Macro that returns value of it->field if it's inside info table, 0 otherwise.
++ * Fields at or below 'length' ('uuid', 'chipset_acm_type', 'version') don't
++ * benefit from this macro, because it requires that 'length' (and by extension
++ * fields below that) is valid.
++ */
++#define info_table_get(it, field)						\
++  (__builtin_offsetof(struct grub_txt_acm_info_table, field) + sizeof(it->field)\
++   <= it->length ? it->field : 0)
++
++/*
 + * Returns hdr + offset if [offset, offset + count * size) is within the bounds
 + * of the ACM, NULL otherwise.
 + */
@@ -92,11 +102,15 @@ index 000000000000..1611b33d4c96
 +n_fit_in_acm (struct grub_txt_acm_header *hdr, grub_uint32_t offset,
 +	      grub_uint32_t size, grub_uint32_t count)
 +{
-+  grub_uint32_t total_size, ret_u32, elem_end;
++  grub_uint32_t total_size, elem_end;
 +  /* ACM size overflow was checked in is_acmod() */
 +  grub_uint32_t acm_len = hdr->size * 4;
 +
-+  /* To simplify rest of the code check if offset is non-0 here */
++  /*
++   * `offset` will often come from `info_table_get`, and this is the most
++   * convenient place to check for the macro returning zero. This is fine, since
++   * there is no legitimate reason to access the zero offset in this manner.
++   */
 +  if ( offset == 0 )
 +    return NULL;
 +
@@ -109,13 +123,11 @@ index 000000000000..1611b33d4c96
 +  if ( elem_end > acm_len )
 +    return NULL;
 +
-+  if ( grub_add ((grub_uint32_t)(unsigned long)hdr, offset, &ret_u32) )
-+    return NULL;
-+
 +  /* Not checking if (hdr + elem_end) overflows. We know that (hdr + acm_len)
-+   * doesn't, and that elem_end <= acm_len. */
++   * doesn't, and that elem_end <= acm_len. For the same reason we don't have to
++   * check if (hdr + offset) overflows. */
 +
-+  return (void *)(unsigned long)ret_u32;
++  return (void *)((unsigned long)hdr + offset);
 +}
 +
 +static void*
@@ -124,16 +136,6 @@ index 000000000000..1611b33d4c96
 +{
 +  return n_fit_in_acm(hdr, offset, size, 1);
 +}
-+
-+/*
-+ * Macro that returns value of it->field if it's inside info table, 0 otherwise.
-+ * Fields at or below 'length' ('uuid', 'chipset_acm_type', 'version') don't
-+ * benefit from this macro, because it requires that 'length' (and by extension
-+ * fields below that) is valid.
-+ */
-+#define info_table_offset(it, field)						\
-+  (__builtin_offsetof(struct grub_txt_acm_info_table, field) + sizeof(it->field)\
-+   <= it->length ? it->field : 0)
 +
 +/*
 + * Returns pointer to ACM information table. If the table is located outside of
@@ -166,19 +168,21 @@ index 000000000000..1611b33d4c96
 +
 +  if ( ptr != NULL )
 +    {
-+      if ( info_table_offset (ptr, length) < info_table_size )
++      if ( info_table_get (ptr, length) < info_table_size )
 +	return NULL;
 +
-+      info_table_size = info_table_offset (ptr, length);
++      info_table_size = info_table_get (ptr, length);
 +      ptr = fits_in_acm(hdr, user_area_off, info_table_size);
 +    }
 +
 +  return ptr;
 +}
 +
-+/* Function returns pointer to chipset ID list, after checking that
++/*
++ * Function returns pointer to chipset ID list, after checking that
 + * grub_txt_acm_chipset_id_list and all grub_txt_acm_chipset_id structures are
-+ * within ACM. Otherwise, NULL is returned. */
++ * within ACM. Otherwise, NULL is returned.
++ */
 +static struct grub_txt_acm_chipset_id_list*
 +get_acmod_chipset_list (struct grub_txt_acm_header *hdr)
 +{
@@ -195,7 +199,7 @@ index 000000000000..1611b33d4c96
 +      return NULL;
 +    }
 +
-+  chipset_id_list = fits_in_acm(hdr, info_table_offset (info_table, chipset_id_list),
++  chipset_id_list = fits_in_acm(hdr, info_table_get (info_table, chipset_id_list),
 +				sizeof(struct grub_txt_acm_chipset_id_list));
 +  if ( chipset_id_list == NULL )
 +    {
@@ -221,9 +225,11 @@ index 000000000000..1611b33d4c96
 +  return chipset_id_list;
 +}
 +
-+/* Function returns pointer to processor ID list, after checking that
++/*
++ * Function returns pointer to processor ID list, after checking that
 + * grub_txt_acm_processor_id_list and all grub_txt_acm_processor_id structures
-+ * are within ACM. Otherwise, NULL is returned. */
++ * are within ACM. Otherwise, NULL is returned.
++ */
 +static struct grub_txt_acm_processor_id_list*
 +get_acmod_processor_list (struct grub_txt_acm_header* hdr)
 +{
@@ -240,7 +246,7 @@ index 000000000000..1611b33d4c96
 +      return NULL;
 +    }
 +
-+  proc_id_list = fits_in_acm(hdr, info_table_offset (info_table, processor_id_list),
++  proc_id_list = fits_in_acm(hdr, info_table_get (info_table, processor_id_list),
 +			     sizeof(struct grub_txt_acm_processor_id_list));
 +  if ( proc_id_list == NULL )
 +    {
@@ -259,7 +265,7 @@ index 000000000000..1611b33d4c96
 +  if ( n_fit_in_acm ( hdr, id_entries_off, sizeof(struct grub_txt_acm_processor_id),
 +		     proc_id_list->count ) == NULL )
 +    {
-+      grub_error (GRUB_ERR_OUT_OF_RANGE, N_("ACM chipset ID entries out of bounds"));
++      grub_error (GRUB_ERR_OUT_OF_RANGE, N_("ACM processor ID entries out of bounds"));
 +      return NULL;
 +    }
 +
@@ -303,7 +309,7 @@ index 000000000000..1611b33d4c96
 +  /*
 +   * TXT specification doesn't give clear mapping of info table size to version,
 +   * so just warn if the size is different than expected but try to use it
-+   * anyway. info_table_offset() macro does enough testing to not read outside
++   * anyway. info_table_get() macro does enough testing to not read outside
 +   * of info table.
 +   */
 +  if ( info_table->length < sizeof(struct grub_txt_acm_info_table) )
@@ -311,7 +317,7 @@ index 000000000000..1611b33d4c96
 +		  info_table->length, sizeof(struct grub_txt_acm_info_table));
 +
 +  if ( type_out )
-+    *type_out = info_table_offset (info_table, chipset_acm_type);
++    *type_out = info_table_get (info_table, chipset_acm_type);
 +
 +  return 1;
 +}
@@ -343,7 +349,10 @@ index 000000000000..1611b33d4c96
 +  /* Is it a valid SINIT module? */
 +  if ( !grub_txt_is_sinit_acmod (sinit_region_base, bios_data->bios_sinit_size) ||
 +       !grub_txt_acmod_match_platform (bios_sinit) )
-+    return NULL;
++    {
++      grub_dprintf("slaunch", "BIOS SINIT module did not pass sanity checks");
++      return NULL;
++    }
 +
 +  return bios_sinit;
 +}
@@ -359,7 +368,7 @@ index 000000000000..1611b33d4c96
 +  if ( info_table == NULL )
 +    return 0;
 +
-+  return info_table_offset (info_table, os_sinit_data_ver);
++  return info_table_get (info_table, os_sinit_data_ver);
 +}
 +
 +grub_uint32_t
@@ -367,13 +376,13 @@ index 000000000000..1611b33d4c96
 +{
 +  static struct grub_txt_acm_info_table *info_table;
 +
-+  /* Assumes that it passed is_sinit_acmod() */
++  /* Assumes that it passed grub_txt_is_sinit_acmod() */
 +  info_table = get_acmod_info_table (hdr);
 +
 +  if ( info_table == NULL || info_table->version < 3 )
 +    return 0;
 +
-+  return info_table_offset (info_table, capabilities);
++  return info_table_get (info_table, capabilities);
 +}
 +
 +int
@@ -538,6 +547,10 @@ index 000000000000..1611b33d4c96
 +  return 1;
 +}
 +
++/*
++ * Choose between the BIOS-provided and user-provided SINIT ACMs, and copy the
++ * chosen module to the SINIT memory.
++ */
 +struct grub_txt_acm_header *
 +grub_txt_sinit_select (struct grub_txt_acm_header *sinit)
 +{
