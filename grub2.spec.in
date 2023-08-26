@@ -225,7 +225,7 @@ Source13:	99-grub-mkconfig.install
 %ifarch %{efi_arch}
 %global with_efi_arch 1
 %global grubefiname grub%{efiarch}.efi
-%global grubeficdname gcd%{efiarch}.efi
+%global grubeficdname boot%{efiarch}.efi
 %global grubefiarch %{target_cpu_name}-efi
 %ifarch %{ix86}
 %global with_efi_modules 0
