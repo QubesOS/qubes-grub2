@@ -557,11 +557,26 @@ ${RPM_BUILD_ROOT}/%{_bindir}/grub2-editenv			\\\
 cd ..								\
 %{nil}
 
+# TODO: switch to %upper macro with rpm 4.19+
+%define upper_() %{lua:print(string.upper(rpm.expand("%{1}")))}
+
+# This is supposed to be case-insensitive anyway. But all-uppercase (even for
+# the x in BOOTx64.EFI) is what both 'grub2-install --removable' and systemd's
+# 'bootctl install' do, and it might be safer:
+# https://github.com/systemd/systemd/commit/00f69504a2c1861d98a027afdebc22c873f09083
+%define efi_default_image() /boot/efi/EFI/BOOT/BOOT%{upper_ %{1}}.EFI
+
 %global efi_startup_script /boot/efi/startup.nsh
 
 %define do_fallback_efi_install()				\
+cd grub-%{1}-%{tarversion}					\
+install -D -m 700 %{2}						\\\
+	$RPM_BUILD_ROOT%{expand:%%efi_default_image %{3}}	\
+%if "%{3}" != "%{alt_efi_arch}"					\
 printf '%s\\n' '\\EFI\\%{efi_vendor}\\%{2}' >			\\\
 	$RPM_BUILD_ROOT%{efi_startup_script}			\
+%endif								\
+cd ..								\
 %{nil}
 
 %define do_legacy_install()					\
@@ -665,6 +680,7 @@ ln -s ../boot/grub2/grub.cfg					\\\
 %exclude %{_libdir}/grub/%{6}					\
 %exclude %{_libdir}/grub/%{6}/*					\
 %endif}								\
+%attr(0700,root,root) %config(noreplace) %{expand:%%efi_default_image %{7}} \
 %if "%{1}" != "%{alt_package_arch}"				\
 %attr(0700,root,root) %config(noreplace) %{efi_startup_script}	\
 %endif								\
@@ -980,6 +996,7 @@ rm -fr $RPM_BUILD_ROOT
 %endif
 %if 0%{with_alt_efi_arch}
 %{expand:%do_alt_efi_install %%{grubaltefiarch} %%{grubaltefiname} %%{grubalteficdname}}
+%{expand:%do_fallback_efi_install %%{grubaltefiarch} %%{grubaltefiname} %%{alt_efi_arch}}
 %endif
 %if 0%{with_legacy_arch}
 %{expand:%do_legacy_install %%{grublegacyarch} %%{alt_grub_target_name} 0%{with_efi_arch}}
@@ -1298,10 +1315,10 @@ mv ${EFI_HOME}/grub.cfg.stb ${EFI_HOME}/grub.cfg
 %exclude %{_datarootdir}/grub/themes/starfield
 
 %if 0%{with_efi_arch}
-%{expand:%define_efi_variant_files %%{package_arch} %%{grubefiname} %%{grubeficdname} %%{grubefiarch} %%{target_cpu_name} %%{grub_target_name}}
+%{expand:%define_efi_variant_files %%{package_arch} %%{grubefiname} %%{grubeficdname} %%{grubefiarch} %%{target_cpu_name} %%{grub_target_name} %%{efiarch}}
 %endif
 %if 0%{with_alt_efi_arch}
-%{expand:%define_efi_variant_files %%{alt_package_arch} %%{grubaltefiname} %%{grubalteficdname} %%{grubaltefiarch} %%{alt_target_cpu_name} %%{alt_grub_target_name}}
+%{expand:%define_efi_variant_files %%{alt_package_arch} %%{grubaltefiname} %%{grubalteficdname} %%{grubaltefiarch} %%{alt_target_cpu_name} %%{alt_grub_target_name} %%{alt_efi_arch}}
 %endif
 %if 0%{with_legacy_arch}
 %{expand:%define_legacy_variant_files %%{legacy_package_arch} %%{grublegacyarch}}
