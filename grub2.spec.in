@@ -557,6 +557,13 @@ ${RPM_BUILD_ROOT}/%{_bindir}/grub2-editenv			\\\
 cd ..								\
 %{nil}
 
+%global efi_startup_script /boot/efi/startup.nsh
+
+%define do_fallback_efi_install()				\
+printf '%s\\n' '\\EFI\\%{efi_vendor}\\%{2}' >			\\\
+	$RPM_BUILD_ROOT%{efi_startup_script}			\
+%{nil}
+
 %define do_legacy_install()					\
 cd grub-%{1}-%{tarversion}					\
 make DESTDIR=$RPM_BUILD_ROOT install				\
@@ -658,6 +665,9 @@ ln -s ../boot/grub2/grub.cfg					\\\
 %exclude %{_libdir}/grub/%{6}					\
 %exclude %{_libdir}/grub/%{6}/*					\
 %endif}								\
+%if "%{1}" != "%{alt_package_arch}"				\
+%attr(0700,root,root) %config(noreplace) %{efi_startup_script}	\
+%endif								\
 								\
 %{expand:%if 0%{?with_efi_modules}				\
 %{expand:%%files %{1}-modules}					\
@@ -966,6 +976,7 @@ rm -fr $RPM_BUILD_ROOT
 %do_common_install
 %if 0%{with_efi_arch}
 %{expand:%do_efi_install %%{grubefiarch} %%{grubefiname} %%{grubeficdname}}
+%{expand:%do_fallback_efi_install %%{grubefiarch} %%{grubefiname} %%{efiarch}}
 %endif
 %if 0%{with_alt_efi_arch}
 %{expand:%do_alt_efi_install %%{grubaltefiarch} %%{grubaltefiname} %%{grubalteficdname}}
