@@ -1,4 +1,4 @@
-From aa504dddd62f792791a04986c3469b10808dd146 Mon Sep 17 00:00:00 2001
+From d75283aa6950fea8ac579735fe4528083b3932bb Mon Sep 17 00:00:00 2001
 From: Ross Philipson <ross.philipson@oracle.com>
 Date: Wed, 7 Aug 2019 14:46:17 -0400
 Subject: [PATCH] i386/txt: Add Intel TXT verification routines
@@ -7,16 +7,16 @@ Signed-off-by: Ross Philipson <ross.philipson@oracle.com>
 Signed-off-by: Daniel Kiper <daniel.kiper@oracle.com>
 Signed-off-by: Krystian Hebel <krystian.hebel@3mdeb.com>
 ---
- grub-core/loader/i386/txt/verify.c | 304 +++++++++++++++++++++++++++++
- 1 file changed, 304 insertions(+)
+ grub-core/loader/i386/txt/verify.c | 269 +++++++++++++++++++++++++++++
+ 1 file changed, 269 insertions(+)
  create mode 100644 grub-core/loader/i386/txt/verify.c
 
 diff --git a/grub-core/loader/i386/txt/verify.c b/grub-core/loader/i386/txt/verify.c
 new file mode 100644
-index 000000000000..d0af8d8bc4e5
+index 000000000000..e8acb7da022f
 --- /dev/null
 +++ b/grub-core/loader/i386/txt/verify.c
-@@ -0,0 +1,304 @@
+@@ -0,0 +1,269 @@
 +/*
 + * verify.c: verify that platform and processor supports Intel(r) TXT
 + *
@@ -77,6 +77,7 @@ index 000000000000..d0af8d8bc4e5
 +#include <grub/misc.h>
 +#include <grub/types.h>
 +#include <grub/dl.h>
++#include <grub/safemath.h>
 +#include <grub/cpu/relocator.h>
 +#include <grub/i386/cpuid.h>
 +#include <grub/i386/msr.h>
@@ -88,11 +89,8 @@ index 000000000000..d0af8d8bc4e5
 +static grub_err_t
 +verify_bios_spec_ver_elt (struct grub_txt_heap_ext_data_element *elt)
 +{
-+  grub_uint8_t *ptr = (grub_uint8_t *)elt;
-+  struct grub_txt_heap_bios_spec_ver_element *bios_spec_ver_elt =
-+         (struct grub_txt_heap_bios_spec_ver_element *)ptr;
-+
-+  if ( elt->size != sizeof(*elt) + sizeof(*bios_spec_ver_elt) )
++  if ( elt->size != GRUB_TXT_HEAP_ELEMENT_HEADER_SIZE +
++                    sizeof(struct grub_txt_heap_bios_spec_ver_element) )
 +    return grub_error (GRUB_ERR_OUT_OF_RANGE,
 +                N_("HEAP_BIOS_SPEC_VER element has wrong size (%d)"),
 +                elt->size);
@@ -104,30 +102,29 @@ index 000000000000..d0af8d8bc4e5
 +static grub_err_t
 +verify_acm_elt (struct grub_txt_heap_ext_data_element *elt)
 +{
-+  grub_uint8_t *ptr = ((grub_uint8_t *)elt + sizeof(*elt));
-+  struct grub_txt_heap_acm_element *acm_elt =
-+         (struct grub_txt_heap_acm_element *)ptr;
-+  grub_uint64_t *acm_addrs;
++  grub_uint64_t acm_addrs_size;
 +  grub_uint32_t i;
 +
-+  if ( elt->size != sizeof(*elt) + sizeof(*acm_elt) +
-+       acm_elt->num_acms*sizeof(grub_uint64_t) )
++  if ( elt->size < GRUB_TXT_HEAP_ELEMENT_HEADER_SIZE +
++                   sizeof(struct grub_txt_heap_acm_element) ||
++       grub_mul (elt->acm.num_acms, sizeof(grub_uint64_t), &acm_addrs_size) ||
++       elt->size != GRUB_TXT_HEAP_ELEMENT_HEADER_SIZE + sizeof(elt->acm) +
++                    acm_addrs_size )
 +    return grub_error (GRUB_ERR_OUT_OF_RANGE,
 +                N_("HEAP_ACM element has wrong size (%d)"),
 +                elt->size);
 +
 +  /* No addrs is not error, but print warning. */
-+  if ( acm_elt->num_acms == 0 )
++  if ( elt->acm.num_acms == 0 )
 +    grub_printf ("WARNING: HEAP_ACM element has no ACM addrs\n");
 +
-+  acm_addrs = (grub_uint64_t *)(ptr + sizeof(*acm_elt));
-+  for ( i = 0; i < acm_elt->num_acms; i++ )
++  for ( i = 0; i < elt->acm.num_acms; i++ )
 +    {
-+      if ( acm_addrs[i] == 0 )
++      if ( elt->acm.addr[i] == 0 )
 +        return grub_error (GRUB_ERR_OUT_OF_RANGE,
 +                    N_("HEAP_ACM element ACM addr (%d) is NULL"), i);
 +
-+      if ( acm_addrs[i] >= 0x100000000UL )
++      if ( elt->acm.addr[i] >= 0x100000000UL )
 +        return grub_error (GRUB_ERR_OUT_OF_RANGE,
 +                    N_("HEAP_ACM element ACM addr (%d) is >4GB"), i);
 +
@@ -140,37 +137,13 @@ index 000000000000..d0af8d8bc4e5
 +static grub_err_t
 +verify_custom_elt (struct grub_txt_heap_ext_data_element *elt)
 +{
-+  grub_uint8_t *ptr = (grub_uint8_t *)elt;
-+  struct grub_txt_heap_custom_element *custom_elt =
-+         (struct grub_txt_heap_custom_element *)ptr;
-+
-+  if ( elt->size < sizeof(*elt) + sizeof(*custom_elt) )
++  if ( elt->size < GRUB_TXT_HEAP_ELEMENT_HEADER_SIZE +
++                   sizeof(struct grub_txt_heap_custom_element) )
 +     return grub_error (GRUB_ERR_OUT_OF_RANGE,
 +                 N_("HEAP_CUSTOM element has wrong size (%d)"),
 +                 elt->size);
 +
 +  /* Any values are allowed */
-+
-+  return GRUB_ERR_NONE;
-+}
-+
-+static grub_err_t
-+verify_evt_log_ptr_elt (struct grub_txt_heap_ext_data_element *elt)
-+{
-+  grub_uint8_t *ptr = (grub_uint8_t *)elt;
-+  struct grub_txt_heap_tpm_event_log_element *elog_elt =
-+         (struct grub_txt_heap_tpm_event_log_element *)ptr;
-+
-+  if ( elt->size != sizeof(*elt) + sizeof(*elog_elt) )
-+     return grub_error (GRUB_ERR_OUT_OF_RANGE,
-+                 N_("HEAP_EVENT_LOG_POINTER element has wrong size (%d)"),
-+                 elt->size);
-+
-+  /* TODO: Sort out how to do this verifier once the event log handling is in place
-+   *
-+   * return verify_evt_log((event_log_container_t *)(unsigned long)
-+   *                       elog_elt->event_log_phys_addr);
-+   */
 +
 +  return GRUB_ERR_NONE;
 +}
@@ -182,13 +155,14 @@ index 000000000000..d0af8d8bc4e5
 +  struct grub_txt_heap_ext_data_element *elt = elts;
 +  grub_err_t err;
 +
-+  if ( elts_size < sizeof(*elt) )
++  if ( elts_size < GRUB_TXT_HEAP_ELEMENT_HEADER_SIZE )
 +     return grub_error (GRUB_ERR_OUT_OF_RANGE,
 +                 N_("TXT heap ext data elements too small"));
 +
 +  for ( ; ; )
 +    {
-+      if ( elts_size < elt->size || elt->size == 0 )
++      if ( elts_size < GRUB_TXT_HEAP_ELEMENT_HEADER_SIZE ||
++           elts_size < elt->size || elt->size == 0 )
 +        return grub_error (GRUB_ERR_OUT_OF_RANGE,
 +                    N_("TXT heap invalid element size: type: %d, size: %d"),
 +                    elt->type, elt->size);
@@ -215,24 +189,15 @@ index 000000000000..d0af8d8bc4e5
 +            if ( err )
 +              return err;
 +            break;
++          /* These shouldn't be present in BIOS data, treat them as errors */
 +          case GRUB_TXT_HEAP_EXTDATA_TYPE_TPM_EVENT_LOG_PTR:
-+            err = verify_evt_log_ptr_elt (elt);
-+            if ( err )
-+              return err;
-+            break;
 +          case GRUB_TXT_HEAP_EXTDATA_TYPE_MADT:
-+            /* Copy of ACPI MADT, not validating */
-+            break;
 +          case GRUB_TXT_HEAP_EXTDATA_TYPE_EVENT_LOG_POINTER2_1:
-+            /* TODO TBOOT did not verify this, not sure why or how to do it */
-+            break;
 +          case GRUB_TXT_HEAP_EXTDATA_TYPE_MCFG:
-+            /* Copy of ACPI MCFG, not validating */
-+            break;
 +          default:
-+	    /* TODO: What kind of element??? Improve the message. */
-+	    grub_printf ("WARNING: unknown element: type: %u, size: %u\n", elt->type, elt->size);
-+            break;
++	          return grub_error (GRUB_ERR_OUT_OF_RANGE,
++                               N_("unknown element: type: %u, size: %u\n"),
++                               elt->type, elt->size);
 +        }
 +
 +      elts_size -= elt->size;
@@ -297,7 +262,7 @@ index 000000000000..d0af8d8bc4e5
 +                 N_("TXT heap is not configured correctly"));
 +
 +  bios_size = grub_txt_bios_data_size (txt_heap);
-+  if ( bios_size == 0 || bios_size > heap_size )
++  if ( bios_size < sizeof (grub_uint64_t) || bios_size > heap_size )
 +     return grub_error (GRUB_ERR_OUT_OF_RANGE,
 +                 N_("invalid size of the TXT heap BIOS data table"));
 +
@@ -322,5 +287,5 @@ index 000000000000..d0af8d8bc4e5
 +  return err;
 +}
 -- 
-2.17.1
+2.41.0
 

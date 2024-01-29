@@ -1,4 +1,4 @@
-From 5eca1b0802b90b5c0c928809f8bb76f41fd0e589 Mon Sep 17 00:00:00 2001
+From 8527ee439916f427443d0eb68b7eb9be031611ee Mon Sep 17 00:00:00 2001
 From: Daniel Kiper <daniel.kiper@oracle.com>
 Date: Mon, 4 May 2020 22:30:58 +0200
 Subject: [PATCH] i386/tpm: Add TPM TIS and CRB driver
@@ -9,18 +9,18 @@ by subsequent patches.
 Signed-off-by: Daniel Kiper <daniel.kiper@oracle.com>
 Signed-off-by: Krystian Hebel <krystian.hebel@3mdeb.com>
 ---
- grub-core/commands/i386/tpm.c | 152 ++++++++++++++++++++++++++++++++++
+ grub-core/commands/i386/tpm.c | 149 ++++++++++++++++++++++++++++++++++
  include/grub/i386/tpm.h       |  36 ++++++++
- 2 files changed, 188 insertions(+)
+ 2 files changed, 185 insertions(+)
  create mode 100644 grub-core/commands/i386/tpm.c
  create mode 100644 include/grub/i386/tpm.h
 
 diff --git a/grub-core/commands/i386/tpm.c b/grub-core/commands/i386/tpm.c
 new file mode 100644
-index 000000000000..1c57e5e826f9
+index 000000000000..f3b6f51ecd05
 --- /dev/null
 +++ b/grub-core/commands/i386/tpm.c
-@@ -0,0 +1,152 @@
+@@ -0,0 +1,149 @@
 +/*
 + *  GRUB  --  GRand Unified Bootloader
 + *  Copyright (C) 2020  Free Software Foundation, Inc.
@@ -108,9 +108,9 @@ index 000000000000..1c57e5e826f9
 +  grub_addr_t addr = TPM_MMIO_BASE + lcl * GRUB_PAGE_SIZE;
 +
 +  if (tpm_intf == TPM_INTF_TIS)
-+    grub_writeb (TIS_RELINQUISH_LCL, addr + TPM_ACCESS);
++    grub_write8 (TIS_RELINQUISH_LCL, addr + TPM_ACCESS);
 +  else if (tpm_intf == TPM_INTF_CRB)
-+    grub_writel (CRB_RELINQUISH_LCL, addr + TPM_LOC_CTRL);
++    grub_write32 (CRB_RELINQUISH_LCL, addr + TPM_LOC_CTRL);
 +}
 +
 +static grub_err_t
@@ -146,27 +146,24 @@ index 000000000000..1c57e5e826f9
 +  cmd_tpm_type = grub_register_command ("tpm_type", grub_cmd_tpm_type,
 +					NULL, N_("Show TPM version and interface type."));
 +
-+  intf_cap = grub_readl (TPM_MMIO_BASE + TPM_INTF_CAPABILITY);
-+  intf_cap >>= INTF_CAP_INTERFACE_VERSION_SHIFT;
-+  intf_cap &= INTF_CAP_INTERFACE_VERSION_MASK;
-+
-+  if (intf_cap == TPM_12_TIS_INTF_12 || intf_cap == TPM_12_TIS_INTF_13)
-+    {
-+      tpm_ver = GRUB_TPM_12;
-+      tpm_intf = TPM_INTF_TIS;
-+      return;
-+    }
-+
-+  if (intf_cap != TPM_20_TIS_INTF_13)
-+    return;
-+
 +  tpm_ver = GRUB_TPM_20;
 +
-+  intf_id = grub_readl (TPM_MMIO_BASE + TPM_INTERFACE_ID);
++  intf_id = grub_read32 (TPM_MMIO_BASE + TPM_INTERFACE_ID);
 +  intf_id >>= INTERFACE_ID_INTERFACE_TYPE_SHIFT;
 +  intf_id &= INTERFACE_ID_INTERFACE_TYPE_MASK;
 +
 +  tpm_intf = (intf_id == TPM_CRB_INTF_ACTIVE) ? TPM_INTF_CRB : TPM_INTF_TIS;
++
++  /* CRB exists only in TPM 2.0 */
++  if (tpm_intf == TPM_INTF_CRB)
++    return;
++
++  intf_cap = grub_read32 (TPM_MMIO_BASE + TPM_INTF_CAPABILITY);
++  intf_cap >>= INTF_CAP_INTERFACE_VERSION_SHIFT;
++  intf_cap &= INTF_CAP_INTERFACE_VERSION_MASK;
++
++  if (intf_cap == TPM_12_TIS_INTF_12 || intf_cap == TPM_12_TIS_INTF_13)
++    tpm_ver = GRUB_TPM_12;
 +}
 +
 +GRUB_MOD_FINI (tpm)
@@ -216,5 +213,5 @@ index 000000000000..d22a2507efa1
 +
 +#endif /* GRUB_I386_TPM_H */
 -- 
-2.17.1
+2.41.0
 

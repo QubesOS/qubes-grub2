@@ -1,4 +1,4 @@
-From 47c88e17987444c862dd83a5e5aeb2faa6b4afb1 Mon Sep 17 00:00:00 2001
+From 0cfc0a5385a0847f79c9225d9dd9522ef25efaad Mon Sep 17 00:00:00 2001
 From: Daniel Kiper <daniel.kiper@oracle.com>
 Date: Mon, 4 May 2020 22:34:59 +0200
 Subject: [PATCH] mmap: Add grub_mmap_get_lowest() and grub_mmap_get_highest()
@@ -11,15 +11,23 @@ Intel TXT secure launcher introduced by subsequent patches.
 
 Signed-off-by: Daniel Kiper <daniel.kiper@oracle.com>
 ---
- grub-core/mmap/mmap.c | 70 +++++++++++++++++++++++++++++++++++++++++++
+ grub-core/mmap/mmap.c | 79 +++++++++++++++++++++++++++++++++++++++++++
  include/grub/memory.h |  3 ++
- 2 files changed, 73 insertions(+)
+ 2 files changed, 82 insertions(+)
 
 diff --git a/grub-core/mmap/mmap.c b/grub-core/mmap/mmap.c
-index c8c8312c56f2..1e93b7e3cabb 100644
+index c8c8312c56f2..5b18b1a4c297 100644
 --- a/grub-core/mmap/mmap.c
 +++ b/grub-core/mmap/mmap.c
-@@ -343,6 +343,76 @@ grub_mmap_unregister (int handle)
+@@ -26,6 +26,7 @@
+ #include <grub/command.h>
+ #include <grub/dl.h>
+ #include <grub/i18n.h>
++#include <grub/safemath.h>
+ 
+ GRUB_MOD_LICENSE ("GPLv3+");
+ 
+@@ -343,6 +344,84 @@ grub_mmap_unregister (int handle)
  
  #endif /* ! GRUB_MMAP_REGISTER_BY_FIRMWARE */
  
@@ -35,14 +43,18 @@ index c8c8312c56f2..1e93b7e3cabb 100644
 +	     void *data)
 +{
 +  addr_limit_t *al = data;
++  grub_uint64_t end;
 +
 +  if (type != GRUB_MEMORY_AVAILABLE)
++    return 0;
++
++  if (grub_add (addr, size, &end))
 +    return 0;
 +
 +  if (addr >= al->limit)
 +    al->addr = grub_min (al->addr, addr);
 +
-+  if ((addr < al->limit) && ((addr + size) > al->limit))
++  if ((addr < al->limit) && (end > al->limit))
 +    al->addr = al->limit;
 +
 +  return 0;
@@ -66,14 +78,18 @@ index c8c8312c56f2..1e93b7e3cabb 100644
 +	      void *data)
 +{
 +  addr_limit_t *al = data;
++  grub_uint64_t end;
 +
 +  if (type != GRUB_MEMORY_AVAILABLE)
 +    return 0;
 +
-+  if ((addr + size) < al->limit)
-+    al->addr = grub_max (al->addr, addr + size);
++  if (grub_add (addr, size, &end))
++    return 0;
 +
-+  if ((addr < al->limit) && ((addr + size) >= al->limit))
++  if (end < al->limit)
++    al->addr = grub_max (al->addr, end);
++
++  if ((addr < al->limit) && (end >= al->limit))
 +    al->addr = al->limit;
 +
 +  return 0;
@@ -111,5 +127,5 @@ index 6da114a1bdc1..8f22f752502b 100644
  
  struct grub_mmap_region
 -- 
-2.17.1
+2.41.0
 

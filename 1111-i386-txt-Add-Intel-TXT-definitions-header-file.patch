@@ -1,4 +1,4 @@
-From 87a1423e0129ba92eb4ef8d626156067333cbed3 Mon Sep 17 00:00:00 2001
+From a19dcf70a333c0de0e17ea1fa95c0b9ada3197ff Mon Sep 17 00:00:00 2001
 From: Ross Philipson <ross.philipson@oracle.com>
 Date: Wed, 7 Aug 2019 13:53:06 -0400
 Subject: [PATCH] i386/txt: Add Intel TXT definitions header file
@@ -6,16 +6,16 @@ Subject: [PATCH] i386/txt: Add Intel TXT definitions header file
 Signed-off-by: Ross Philipson <ross.philipson@oracle.com>
 Signed-off-by: Daniel Kiper <daniel.kiper@oracle.com>
 ---
- include/grub/i386/txt.h | 691 ++++++++++++++++++++++++++++++++++++++++
- 1 file changed, 691 insertions(+)
+ include/grub/i386/txt.h | 725 ++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 725 insertions(+)
  create mode 100644 include/grub/i386/txt.h
 
 diff --git a/include/grub/i386/txt.h b/include/grub/i386/txt.h
 new file mode 100644
-index 000000000000..7d57af68841f
+index 000000000000..d8598e259a77
 --- /dev/null
 +++ b/include/grub/i386/txt.h
-@@ -0,0 +1,691 @@
+@@ -0,0 +1,725 @@
 +/*
 + *  GRUB  --  GRand Unified Bootloader
 + *  Copyright (C) 2020  Oracle and/or its affiliates.
@@ -45,43 +45,34 @@ index 000000000000..7d57af68841f
 +#include <grub/i386/mmio.h>
 +#include <grub/i386/slaunch.h>
 +
-+/* Intel TXT Software Developers Guide */
++/* Intel TXT Software Developers Guide Revision 017.4 */
 +
-+/* Chapter 2, Table 2 MLE/SINIT Capabilities Field Bit Definitions */
-+
-+#define GRUB_TXT_PCR_EXT_MAX_AGILITY_POLICY	0
-+#define GRUB_TXT_PCR_EXT_MAX_PERF_POLICY	1
-+
++/* Chapter 2, Table 4. MLE/SINIT Capabilities Field Bit Definitions */
 +#define GRUB_TXT_PLATFORM_TYPE_LEGACY		0
 +#define GRUB_TXT_PLATFORM_TYPE_CLIENT		1
 +#define GRUB_TXT_PLATFORM_TYPE_SERVER		2
 +#define GRUB_TXT_PLATFORM_TYPE_RESERVED		3
 +
-+#define GRUB_TXT_CAPS_GETSEC_WAKE_SUPPORT	(1<<0)
-+#define GRUB_TXT_CAPS_MONITOR_SUPPORT		(1<<1)
-+#define GRUB_TXT_CAPS_ECX_PT_SUPPORT		(1<<2)
-+#define GRUB_TXT_CAPS_STM_SUPPORT		(1<<3)
++#define GRUB_TXT_CAPS_GETSEC_WAKE_SUPPORT		(1<<0)
++#define GRUB_TXT_CAPS_MONITOR_SUPPORT			(1<<1)
++#define GRUB_TXT_CAPS_ECX_PT_SUPPORT			(1<<2)
++#define GRUB_TXT_CAPS_STM_SUPPORT			(1<<3)
 +#define GRUB_TXT_CAPS_TPM_12_NO_LEGACY_PCR_USAGE	(1<<4)
-+#define GRUB_TXT_CAPS_TPM_12_AUTH_PCR_USAGE	(1<<5)
-+#define GRUB_TXT_CAPS_PLATFORM_TYPE		(3<<6)
-+#define GRUB_TXT_CAPS_MAXPHYSADDR_SUPPORT	(1<<8)
-+#define GRUB_TXT_CAPS_TPM_20_EVTLOG_SUPPORT	(1<<9)
-+#define GRUB_TXT_CAPS_CBNT_SUPPORT		(1<<10)
++#define GRUB_TXT_CAPS_TPM_12_AUTH_PCR_USAGE		(1<<5)  /* Must be 1 for TPM 2.0 */
++#define GRUB_TXT_CAPS_PLATFORM_TYPE			(3<<6)
++#define GRUB_TXT_CAPS_MAXPHYSADDR_SUPPORT		(1<<8)
++#define GRUB_TXT_CAPS_TPM_20_EVTLOG_SUPPORT		(1<<9)
++#define GRUB_TXT_CAPS_CBNT_SUPPORT			(1<<10)
++#define GRUB_TXT_CAPS_STARTUP_ACM_SUPPORT		(7<<11) /* Reserved for MLE, must be 0 */
++#define GRUB_TXT_CAPS_DMA_PROTECTION			(1<<14) /* 0 = Legacy, 1 = TPR */
 +/* Rest is reserved */
 +
 +/* Appendix A TXT Execution Technology Authenticated Code Modules */
 +/* A.1 Authenticated Code Module Format */
-+
 +#define GRUB_TXT_ACM_MODULE_TYPE		2
 +
 +#define GRUB_TXT_ACM_MODULE_SUB_TYPE_TXT_ACM	0
 +#define GRUB_TXT_ACM_MODULE_SUB_TYPE_S_ACM	1
-+
-+#define GRUB_TXT_ACM_HEADER_LEN_0_0		161
-+#define GRUB_TXT_ACM_HEADER_LEN_3_0		224
-+
-+#define GRUB_TXT_ACM_HEADER_VERSION_0_0		0x0000
-+#define GRUB_TXT_ACM_HEADER_VERSION_3_0		0x0300
 +
 +#define GRUB_TXT_ACM_FLAG_PREPRODUCTION		(1<<14)
 +#define GRUB_TXT_ACM_FLAG_DEBUG_SIGNED		(1<<15)
@@ -117,10 +108,12 @@ index 000000000000..7d57af68841f
 +  /* RSA Pub Key and Signature */
 +} GRUB_PACKED;
 +
++/* A.1.2 ACM Information Table */
 +#define GRUB_TXT_ACM_UUID "\xaa\x3a\xc0\x7f\xa7\x46\xdb\x18\x2e\xac\x69\x8f\x8d\x41\x7f\x5a"
 +
 +#define GRUB_TXT_ACM_CHIPSET_TYPE_BIOS		0
 +#define GRUB_TXT_ACM_CHIPSET_TYPE_SINIT		1
++/* Revocation ACMs */
 +#define GRUB_TXT_ACM_CHIPSET_TYPE_BIOS_RACM	8
 +#define GRUB_TXT_ACM_CHIPSET_TYPE_SINIT_RACM	9
 +
@@ -172,18 +165,6 @@ index 000000000000..7d57af68841f
 +  grub_uint64_t platform_mask;
 +} GRUB_PACKED;
 +
-+#define GRUB_TXT_TPM_CAPS_EXTPOL_NONE		0 /* TPM 1.2 */
-+#define GRUB_TXT_TPM_CAPS_EXTPOL_MA		1
-+#define GRUB_TXT_TPM_CAPS_EXTPOL_MP		2
-+#define GRUB_TXT_TPM_CAPS_EXTPOL_BOTH		3
-+
-+#define GRUB_TXT_TPM_CAPS_FAMILY_DISCRETE_12	1
-+#define GRUB_TXT_TPM_CAPS_FAMILY_DISCRETE_20	2
-+#define GRUB_TXT_TPM_CAPS_FAMILY_FIRMWARE_20	8
-+
-+#define GRUB_TXT_TPM_CAPS_INITIAL_NV_INDICES	0
-+#define GRUB_TXT_TPM_CAPS_TCP_NV_INDICES	1
-+
 +struct grub_txt_acm_tpm_info
 +{
 +  grub_uint32_t capabilities;
@@ -205,6 +186,7 @@ index 000000000000..7d57af68841f
 +#define GRUB_TXT_ERRORCODE		0x0030
 +#define GRUB_TXT_CMD_RESET		0x0038
 +#define GRUB_TXT_CMD_CLOSE_PRIVATE	0x0048
++/* VER_FSBIF is considered deprecated, but some CPUs still use it */
 +#define GRUB_TXT_VER_FSBIF		0x0100
 +#define GRUB_TXT_DIDVID			0x0110
 +#define GRUB_TXT_VER_QPIIF		0x0200
@@ -214,8 +196,7 @@ index 000000000000..7d57af68841f
 +#define GRUB_TXT_MLE_JOIN		0x0290
 +#define GRUB_TXT_HEAP_BASE		0x0300
 +#define GRUB_TXT_HEAP_SIZE		0x0308
-+#define GRUB_TXT_MSEG_BASE		0x0310
-+#define GRUB_TXT_MSEG_SIZE		0x0318
++/* DPR is considered deprecated, but some CPUs still use it */
 +#define GRUB_TXT_DPR			0x0330
 +#define GRUB_TXT_CMD_OPEN_LOCALITY1	0x0380
 +#define GRUB_TXT_CMD_CLOSE_LOCALITY1	0x0388
@@ -253,7 +234,7 @@ index 000000000000..7d57af68841f
 +  };
 +} GRUB_PACKED;
 +
-+#define GRUB_TXT_VERSION_DEBUG_FUSED	(1<<31)
++#define GRUB_TXT_VERSION_PROD_FUSED	(1<<31)
 +
 +/* Appendix C Intel TXT Heap Memory */
 +
@@ -268,19 +249,11 @@ index 000000000000..7d57af68841f
 +  grub_uint8_t data5[6];
 +} GRUB_PACKED;
 +
-+struct grub_txt_heap_ext_data_element
-+{
-+  grub_uint32_t type;
-+  grub_uint32_t size;
-+  grub_uint8_t data[];
-+} GRUB_PACKED;
-+
 +#define GRUB_TXT_HEAP_EXTDATA_TYPE_END			0
 +
 +struct grub_txt_heap_end_element
 +{
-+  grub_uint32_t type;
-+  grub_uint32_t size;
++  /* Empty, just the common header with type and size */
 +} GRUB_PACKED;
 +
 +#define GRUB_TXT_HEAP_EXTDATA_TYPE_BIOS_SPEC_VER	1
@@ -298,6 +271,7 @@ index 000000000000..7d57af68841f
 +{
 +  grub_uint32_t num_acms;
 +  /* Array of num_acms grub_uint64_t addresses */
++  grub_uint64_t addr[];
 +} GRUB_PACKED;
 +
 +#define GRUB_TXT_HEAP_EXTDATA_TYPE_STM			3
@@ -305,6 +279,9 @@ index 000000000000..7d57af68841f
 +struct grub_txt_heap_stm_element
 +{
 +  /* STM specific BIOS properties */
++  /* GNU extension used to counteract "error: flexible array member in a struct
++   * with no named members". */
++  grub_uint8_t data[0];
 +} GRUB_PACKED;
 +
 +#define GRUB_TXT_HEAP_EXTDATA_TYPE_CUSTOM		4
@@ -313,14 +290,14 @@ index 000000000000..7d57af68841f
 +{
 +  struct grub_txt_heap_uuid uuid;
 +  /* Vendor Data */
++  grub_uint8_t data[];
 +} GRUB_PACKED;
 +
++/* Deprecated, but still used for TPM 1.2 */
 +#define GRUB_TXT_HEAP_EXTDATA_TYPE_TPM_EVENT_LOG_PTR	5
 +
 +struct grub_txt_heap_tpm_event_log_element
 +{
-+  grub_uint32_t type;
-+  grub_uint32_t size;
 +  grub_uint64_t event_log_phys_addr;
 +} GRUB_PACKED;
 +
@@ -329,14 +306,15 @@ index 000000000000..7d57af68841f
 +struct grub_txt_heap_madt_element
 +{
 +  /* Copy of ACPI MADT table */
++  /* GNU extension used to counteract "error: flexible array member in a struct
++   * with no named members". */
++  grub_uint8_t madt[0];
 +} GRUB_PACKED;
 +
 +#define GRUB_TXT_HEAP_EXTDATA_TYPE_EVENT_LOG_POINTER2_1	8
 +
 +struct grub_txt_heap_event_log_pointer2_1_element
 +{
-+  grub_uint32_t type;
-+  grub_uint32_t size;
 +  grub_uint64_t phys_addr;
 +  grub_uint32_t allocated_event_container_size;
 +  grub_uint32_t first_record_offset;
@@ -348,6 +326,28 @@ index 000000000000..7d57af68841f
 +struct grub_txt_heap_mcfg_element
 +{
 +  /* Copy of ACPI MCFG table */
++  /* GNU extension used to counteract "error: flexible array member in a struct
++   * with no named members". */
++  grub_uint8_t data[0];
++} GRUB_PACKED;
++
++#define GRUB_TXT_HEAP_ELEMENT_HEADER_SIZE	(2 * sizeof(grub_uint32_t))
++
++struct grub_txt_heap_ext_data_element
++{
++  grub_uint32_t type;
++  grub_uint32_t size; /* Must be at least 8 bytes, includes size of this struct */
++  union {
++    struct grub_txt_heap_end_element end;
++    struct grub_txt_heap_bios_spec_ver_element bios_spec_ver;
++    struct grub_txt_heap_acm_element acm;
++    struct grub_txt_heap_stm_element stm;
++    struct grub_txt_heap_custom_element custom;
++    struct grub_txt_heap_tpm_event_log_element tpm_event_log;
++    struct grub_txt_heap_madt_element madt;
++    struct grub_txt_heap_event_log_pointer2_1_element event_log_pointer2_1;
++    struct grub_txt_heap_mcfg_element mcfg;
++  };
 +} GRUB_PACKED;
 +
 +/* TXT Heap Tables */
@@ -357,7 +357,7 @@ index 000000000000..7d57af68841f
 +  grub_uint32_t version; /* Currently 5 for TPM 1.2 and 6 for TPM 2.0 */
 +  grub_uint32_t bios_sinit_size;
 +  grub_uint64_t reserved1;
-+  grub_uint64_t reserved22;
++  grub_uint64_t reserved2;
 +  grub_uint32_t num_logical_procs;
 +  /* Versions >= 5 with updates in version 6 */
 +  grub_uint32_t sinit_flags;
@@ -367,9 +367,6 @@ index 000000000000..7d57af68841f
 +} GRUB_PACKED;
 +
 +/* GRUB SLAUNCH specific definitions OS-MLE data */
-+#define GRUB_SL_BOOTPARAMS_OFFSET	0x12c
-+#define GRUB_SL_MAX_EVENT_LOG_SIZE	(5*4*1024)   /* 4k*5 */
-+#define GRUB_SL_MAX_VARIABLE_MTRRS	32
 +#define GRUB_SL_OS_MLE_STRUCT_VERSION	1
 +
 +struct grub_slaunch_mtrr_pair
@@ -398,10 +395,14 @@ index 000000000000..7d57af68841f
 +  grub_uint8_t mle_scratch[64];
 +} GRUB_PACKED;
 +
++/* Table 29. OS to SINIT Data Table */
++#define GRUB_TXT_PCR_EXT_MAX_AGILITY_POLICY	0
++#define GRUB_TXT_PCR_EXT_MAX_PERF_POLICY	1
++
 +struct grub_txt_os_sinit_data
 +{
 +  grub_uint32_t version; /* Currently 6 for TPM 1.2 and 7 for TPM 2.0 */
-+  grub_uint32_t flags;
++  grub_uint32_t flags;   /* Version 7+ only, otherwise reserved */
 +  grub_uint64_t mle_ptab;
 +  grub_uint64_t mle_size;
 +  grub_uint64_t mle_hdr_base;
@@ -412,8 +413,9 @@ index 000000000000..7d57af68841f
 +  grub_uint64_t lcp_po_base;
 +  grub_uint64_t lcp_po_size;
 +  grub_uint32_t capabilities;
-+  /* Version = 5 */
-+  grub_uint64_t    efi_rsdt_ptr;
++  /* Versions >= 5 */
++  /* Warning: version 5 has pointer to RSDT here, not RSDP */
++  grub_uint64_t    efi_rsdp_ptr;
 +  /* Versions >= 6 */
 +  /* Ext Data Elements */
 +  grub_uint8_t ext_data_elts[];
@@ -422,7 +424,7 @@ index 000000000000..7d57af68841f
 +struct grub_txt_sinit_mle_data
 +{
 +  grub_uint32_t version;             /* Current values are 6 through 9 */
-+  /* Versions <= 8 */
++  /* Reserved for versions >= 9, must be 0 */
 +  grub_uint8_t bios_acm_id[20];
 +  grub_uint32_t edx_senter_flags;
 +  grub_uint64_t mseg_valid;
@@ -439,7 +441,7 @@ index 000000000000..7d57af68841f
 +  grub_uint32_t sinit_vtd_dmar_table_size;
 +  grub_uint32_t sinit_vtd_dmar_table_offset;
 +  /* Versions >= 8 */
-+  grub_uint32_t processor_scrtm_status;
++  grub_uint32_t processor_scrtm_status;  /* Reserved for version 9 */
 +  /* Versions >= 9 */
 +  /* Ext Data Elements */
 +} GRUB_PACKED;
@@ -454,7 +456,9 @@ index 000000000000..7d57af68841f
 +
 +/* Section 2 Measured Launch Environment */
 +/* 2.1 MLE Architecture Overview */
-+/* Table 1. MLE Header structure */
++/* Table 3. MLE Header structure */
++
++#define GRUB_TXT_MLE_UUID "\x5a\xac\x82\x90\x6f\x47\xa7\x74\x0f\x5c\x55\xa2\xcb\x51\xb6\x42"
 +
 +struct grub_txt_mle_header
 +{
@@ -485,18 +489,44 @@ index 000000000000..7d57af68841f
 +
 +/* TXT register and heap access */
 +
-+static inline grub_uint64_t
-+grub_txt_reg_pub_readq (grub_uint32_t reg)
++static inline grub_uint8_t
++grub_txt_reg_pub_readb (grub_uint16_t reg)
 +{
-+  return grub_readq ((void *) (GRUB_TXT_CFG_REGS_PUB + reg));
++  return grub_read8 (GRUB_TXT_CFG_REGS_PUB + reg);
++}
++
++static inline grub_uint32_t
++grub_txt_reg_pub_readl (grub_uint16_t reg)
++{
++  return grub_read32 (GRUB_TXT_CFG_REGS_PUB + reg);
++}
++
++static inline grub_uint64_t
++grub_txt_reg_pub_readq (grub_uint16_t reg)
++{
++  return grub_read64 (GRUB_TXT_CFG_REGS_PUB + reg);
 +}
 +
 +static inline grub_uint8_t *
 +grub_txt_get_heap (void)
 +{
-+  return (grub_uint8_t *)(grub_addr_t) grub_txt_reg_pub_readq (GRUB_TXT_HEAP_BASE);
++  return (grub_uint8_t *)(grub_addr_t) grub_txt_reg_pub_readl (GRUB_TXT_HEAP_BASE);
 +}
 +
++static inline grub_uint32_t
++grub_txt_get_heap_size (void)
++{
++  return grub_txt_reg_pub_readl (GRUB_TXT_HEAP_SIZE);
++}
++
++/*
++ * Each block of data on heap begins with 64-bit size field, followed by proper
++ * data. Specified size includes size field, so the minimal value of that field
++ * is 8. TXT SDG mentions that all sizes must be multiples of 8 bytes, but even
++ * BiosData produced by code signed by Intel doesn't follow that requirement.
++ * This means that we can't just cast pointer to arbitrary location on TXT heap
++ * with (grub_uint64_t *), because unaligned pointer is UB.
++ */
 +static inline grub_uint64_t
 +grub_txt_bios_data_size (grub_uint8_t *heap)
 +{
@@ -518,14 +548,16 @@ index 000000000000..7d57af68841f
 +static inline struct grub_txt_os_mle_data*
 +grub_txt_os_mle_data_start (grub_uint8_t *heap)
 +{
-+  return (struct grub_txt_os_mle_data*)(heap + grub_txt_bios_data_size (heap) +
++  return (struct grub_txt_os_mle_data*)(heap +
++                                        grub_txt_bios_data_size (heap) +
 +                                        sizeof (grub_uint64_t));
 +}
 +
 +static inline grub_uint64_t
 +grub_txt_os_sinit_data_size (grub_uint8_t *heap)
 +{
-+  return *(grub_uint64_t *)(heap + grub_txt_bios_data_size (heap) +
++  return *(grub_uint64_t *)(heap +
++                            grub_txt_bios_data_size (heap) +
 +                            grub_txt_os_mle_data_size (heap));
 +}
 +
@@ -533,14 +565,16 @@ index 000000000000..7d57af68841f
 +grub_txt_os_sinit_data_start (grub_uint8_t *heap)
 +{
 +  return (struct grub_txt_os_sinit_data*)(heap +
-+                 grub_txt_bios_data_size (heap) +
-+                 grub_txt_os_mle_data_size (heap) + sizeof (grub_uint64_t));
++                                          grub_txt_bios_data_size (heap) +
++                                          grub_txt_os_mle_data_size (heap) +
++                                          sizeof (grub_uint64_t));
 +}
 +
 +static inline grub_uint64_t
 +grub_txt_sinit_mle_data_size (grub_uint8_t *heap)
 +{
-+  return *(grub_uint64_t *)(heap + grub_txt_bios_data_size (heap) +
++  return *(grub_uint64_t *)(heap +
++                            grub_txt_bios_data_size (heap) +
 +                            grub_txt_os_mle_data_size (heap) +
 +                            grub_txt_os_sinit_data_size (heap));
 +}
@@ -549,10 +583,10 @@ index 000000000000..7d57af68841f
 +grub_txt_sinit_mle_data_start (grub_uint8_t *heap)
 +{
 +  return (struct grub_txt_sinit_mle_data*)(heap +
-+                 grub_txt_bios_data_size (heap) +
-+                 grub_txt_os_mle_data_size (heap) +
-+                 grub_txt_os_sinit_data_size (heap) +
-+                 sizeof (grub_uint64_t));
++                                           grub_txt_bios_data_size (heap) +
++                                           grub_txt_os_mle_data_size (heap) +
++                                           grub_txt_os_sinit_data_size (heap) +
++                                           sizeof (grub_uint64_t));
 +}
 +
 +/* Intel 64 and IA-32 Architectures Software Developer’s Manual */
@@ -586,7 +620,7 @@ index 000000000000..7d57af68841f
 +{
 +  grub_uint32_t caps;
 +
-+  asm volatile (".byte 0x0f,0x37\n"
++  asm volatile ("getsec"
 +                        : "=a" (caps)
 +                        : "a" (GRUB_SMX_LEAF_CAPABILITIES), "b" (index));
 +  return caps;
@@ -595,7 +629,7 @@ index 000000000000..7d57af68841f
 +static inline void
 +grub_txt_getsec_enteraccs (grub_uint32_t acm_phys_addr, grub_uint32_t acm_size)
 +{
-+  asm volatile (".byte 0x0f,0x37\n" :
++  asm volatile ("getsec" :
 +                        : "a" (GRUB_SMX_LEAF_ENTERACCS),
 +                          "b" (acm_phys_addr), "c" (acm_size));
 +}
@@ -603,22 +637,34 @@ index 000000000000..7d57af68841f
 +static inline void
 +grub_txt_getsec_exitac (grub_uint32_t near_jump)
 +{
-+  asm volatile (".byte 0x0f,0x37\n" :
++  asm volatile ("getsec" :
 +                        : "a" (GRUB_SMX_LEAF_EXITAC), "b" (near_jump));
 +}
 +
 +static inline void
 +grub_txt_getsec_senter (grub_uint32_t acm_phys_addr, grub_uint32_t acm_size)
 +{
-+  asm volatile (".byte 0x0f,0x37\n" :
++  asm volatile ("getsec" :
 +                        : "a" (GRUB_SMX_LEAF_SENTER),
-+                          "b" (acm_phys_addr), "c" (acm_size));
++                          "b" (acm_phys_addr), "c" (acm_size), "d"(0));
 +}
 +
 +static inline void
 +grub_txt_getsec_sexit (void)
 +{
-+  asm volatile (".byte 0x0f,0x37\n" : : "a" (GRUB_SMX_LEAF_SEXIT));
++  asm volatile ("getsec" : : "a" (GRUB_SMX_LEAF_SEXIT));
++}
++
++static inline void
++grub_txt_getsec_parameters (grub_uint32_t index, grub_uint32_t *eax_out,
++                            grub_uint32_t *ebx_out, grub_uint32_t *ecx_out)
++{
++  if (!eax_out || !ebx_out || !ecx_out)
++    return;
++
++  asm volatile ("getsec"
++                        : "=a" (*eax_out), "=b" (*ebx_out), "=c" (*ecx_out)
++                        : "a" (GRUB_SMX_LEAF_PARAMETERS), "b" (index));
 +}
 +
 +#define GRUB_SMX_PARAMETER_TYPE_MASK		0x1f
@@ -632,7 +678,7 @@ index 000000000000..7d57af68841f
 +
 +#define GRUB_SMX_PARAMETER_MAX_VERSIONS	0x20
 +
-+#define GRUB_SMX_GET_MAX_ACM_SIZE(v)	((v & ~GRUB_SMX_PARAMETER_TYPE_MASK)*0x20)
++#define GRUB_SMX_GET_MAX_ACM_SIZE(v)	((v) & ~(__typeof__(v))GRUB_SMX_PARAMETER_TYPE_MASK)
 +
 +#define GRUB_SMX_ACM_MEMORY_TYPE_UC	0x00000100
 +#define GRUB_SMX_ACM_MEMORY_TYPE_WC	0x00000200
@@ -640,13 +686,13 @@ index 000000000000..7d57af68841f
 +#define GRUB_SMX_ACM_MEMORY_TYPE_WP	0x00002000
 +#define GRUB_SMX_ACM_MEMORY_TYPE_WB	0x00004000
 +
-+#define GRUB_SMX_GET_ACM_MEMORY_TYPES(v) (v & ~GRUB_SMX_PARAMETER_TYPE_MASK)
++#define GRUB_SMX_GET_ACM_MEMORY_TYPES(v) ((v) & ~(__typeof__(v))GRUB_SMX_PARAMETER_TYPE_MASK)
 +
 +#define GRUB_SMX_GET_SENTER_CONTROLS(v)	((v & 0x7f00) >> 8)
 +
 +#define GRUB_SMX_PROCESSOR_BASE_SCRTM	0x00000020
-+#define GRUB_SMX_MACHINE_CHECK_HANLDING	0x00000040
-+#define GRUB_SMX_GET_TXT_EXT_FEATURES(v) (v & (GRUB_SMX_PROCESSOR_BASE_SCRTM|GRUB_SMX_MACHINE_CHECK_HANLDING))
++#define GRUB_SMX_MACHINE_CHECK_HANDLING	0x00000040
++#define GRUB_SMX_GET_TXT_EXT_FEATURES(v) (v & (__typeof__(v))(GRUB_SMX_PROCESSOR_BASE_SCRTM|GRUB_SMX_MACHINE_CHECK_HANDLING))
 +
 +#define GRUB_SMX_DEFAULT_VERSION	0x0
 +#define GRUB_SMX_DEFAULT_VERSION_MASK	0xffffffff
@@ -673,18 +719,6 @@ index 000000000000..7d57af68841f
 +  grub_uint32_t txt_feature_ext_flags;
 +} GRUB_PACKED;
 +
-+static inline void
-+grub_txt_getsec_parameters (grub_uint32_t index, grub_uint32_t *eax_out,
-+                            grub_uint32_t *ebx_out, grub_uint32_t *ecx_out)
-+{
-+  if (!eax_out || !ebx_out || !ecx_out)
-+    return;
-+
-+  asm volatile (".byte 0x0f,0x37\n"
-+                        : "=a" (*eax_out), "=b" (*ebx_out), "=c" (*ecx_out)
-+                        : "0" (GRUB_SMX_LEAF_PARAMETERS), "1" (index));
-+}
-+
 +extern grub_uint32_t grub_txt_supported_os_sinit_data_ver (struct grub_txt_acm_header* hdr);
 +
 +extern grub_uint32_t grub_txt_get_sinit_capabilities (struct grub_txt_acm_header* hdr);
@@ -708,5 +742,5 @@ index 000000000000..7d57af68841f
 +
 +#endif
 -- 
-2.17.1
+2.41.0
 

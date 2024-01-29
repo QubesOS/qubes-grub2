@@ -1,0 +1,41 @@
+From 868093de8910bd66abcde04ca928538e07366ad7 Mon Sep 17 00:00:00 2001
+From: Krystian Hebel <krystian.hebel@3mdeb.com>
+Date: Mon, 22 Jan 2024 13:14:39 +0100
+Subject: [PATCH] i386/memory: Define GRUB_PAGE_MASK constant and
+ GRUB_PAGE_{UP,DOWN} macros
+
+Subsequent patches will use those macros and constant.
+
+Signed-off-by: Krystian Hebel <krystian.hebel@3mdeb.com>
+---
+ include/grub/i386/memory.h | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/include/grub/i386/memory.h b/include/grub/i386/memory.h
+index c64529630f19..56f64855be7e 100644
+--- a/include/grub/i386/memory.h
++++ b/include/grub/i386/memory.h
+@@ -22,6 +22,7 @@
+ 
+ #define GRUB_PAGE_SHIFT		12
+ #define GRUB_PAGE_SIZE		(1UL << GRUB_PAGE_SHIFT)
++#define GRUB_PAGE_MASK		(~(GRUB_PAGE_SIZE - 1))
+ 
+ /* The flag for protected mode.  */
+ #define GRUB_MEMORY_CPU_CR0_PE_ON		0x1
+@@ -43,8 +44,12 @@
+ 
+ #define GRUB_MMAP_MALLOC_LOW 1
+ 
++#include <grub/misc.h>
+ #include <grub/types.h>
+ 
++#define GRUB_PAGE_UP(p)		ALIGN_UP (p, GRUB_PAGE_SIZE)
++#define GRUB_PAGE_DOWN(p)	ALIGN_DOWN (p, GRUB_PAGE_SIZE)
++
+ struct grub_e820_mmap_entry
+ {
+   grub_uint64_t addr;
+-- 
+2.41.0
+

@@ -1,19 +1,24 @@
-From 1d08644f2c341b472ea9db94de746b3030a5f1c3 Mon Sep 17 00:00:00 2001
+From f6a4ec51420020d205add6a8a95d13cd1b5a2be5 Mon Sep 17 00:00:00 2001
 From: Ross Philipson <ross.philipson@oracle.com>
 Date: Wed, 7 Aug 2019 13:50:14 -0400
 Subject: [PATCH] i386/slaunch: Add basic platform support for secure launch
+
+Some of the commands declared in header files will be implemented in
+the follow-up commits.
 
 Signed-off-by: Ross Philipson <ross.philipson@oracle.com>
 Signed-off-by: Daniel Kiper <daniel.kiper@oracle.com>
 Signed-off-by: Krystian Hebel <krystian.hebel@3mdeb.com>
 ---
- include/grub/i386/cpuid.h |  12 ++++
- include/grub/i386/crfr.h  | 127 ++++++++++++++++++++++++++++++++++++++
- include/grub/i386/mmio.h  |  72 +++++++++++++++++++++
- include/grub/i386/msr.h   |  61 ++++++++++++++++++
- 4 files changed, 272 insertions(+)
+ include/grub/i386/cpuid.h   |  12 ++++
+ include/grub/i386/crfr.h    | 127 ++++++++++++++++++++++++++++++++++++
+ include/grub/i386/mmio.h    |  72 ++++++++++++++++++++
+ include/grub/i386/msr.h     |  63 ++++++++++++++++++
+ include/grub/i386/slaunch.h |  58 ++++++++++++++++
+ 5 files changed, 332 insertions(+)
  create mode 100644 include/grub/i386/crfr.h
  create mode 100644 include/grub/i386/mmio.h
+ create mode 100644 include/grub/i386/slaunch.h
 
 diff --git a/include/grub/i386/cpuid.h b/include/grub/i386/cpuid.h
 index f7ae4b0a4641..0ddd87b1544e 100644
@@ -40,7 +45,7 @@ index f7ae4b0a4641..0ddd87b1544e 100644
  
 diff --git a/include/grub/i386/crfr.h b/include/grub/i386/crfr.h
 new file mode 100644
-index 000000000000..1dcae427dc8b
+index 000000000000..2efd42a1767c
 --- /dev/null
 +++ b/include/grub/i386/crfr.h
 @@ -0,0 +1,127 @@
@@ -91,7 +96,7 @@ index 000000000000..1dcae427dc8b
 +#define GRUB_CR4_X86_PGE	0x00000080 /* Enable Page global */
 +#define GRUB_CR4_X86_PCE	0x00000100 /* Enable Performance monitoring counter */
 +#define GRUB_CR4_X86_FXSR	0x00000200 /* Fast FPU save/restore */
-+#define GRUB_CR4_X86_XMM	0x00000400 /* Enable SIMD/MMX2 to use except 16 */
++#define GRUB_CR4_X86_XMM	0x00000400 /* Generate #XM instead of #UD for SIMD */
 +#define GRUB_CR4_X86_VMXE	0x00002000 /* Enable VMX */
 +#define GRUB_CR4_X86_SMXE	0x00004000 /* Enable SMX */
 +#define GRUB_CR4_X86_PCIDE	0x00020000 /* Enable PCID */
@@ -173,7 +178,7 @@ index 000000000000..1dcae427dc8b
 +#endif
 diff --git a/include/grub/i386/mmio.h b/include/grub/i386/mmio.h
 new file mode 100644
-index 000000000000..b5bce71ef8d6
+index 000000000000..97a30f7d8af6
 --- /dev/null
 +++ b/include/grub/i386/mmio.h
 @@ -0,0 +1,72 @@
@@ -201,7 +206,7 @@ index 000000000000..b5bce71ef8d6
 +#include <grub/types.h>
 +
 +static inline grub_uint8_t
-+grub_readb (const grub_addr_t addr)
++grub_read8 (const grub_addr_t addr)
 +{
 +  grub_uint8_t val;
 +
@@ -211,7 +216,7 @@ index 000000000000..b5bce71ef8d6
 +}
 +
 +static inline grub_uint32_t
-+grub_readl (const grub_addr_t addr)
++grub_read32 (const grub_addr_t addr)
 +{
 +  grub_uint32_t val;
 +
@@ -221,7 +226,7 @@ index 000000000000..b5bce71ef8d6
 +}
 +
 +static inline grub_uint64_t
-+grub_readq (const grub_addr_t addr)
++grub_read64 (const grub_addr_t addr)
 +{
 +  grub_uint64_t val;
 +
@@ -231,26 +236,26 @@ index 000000000000..b5bce71ef8d6
 +}
 +
 +static inline void
-+grub_writeb (grub_uint8_t val, grub_addr_t addr)
++grub_write8 (grub_uint8_t val, grub_addr_t addr)
 +{
 +  (*(volatile grub_uint8_t *) (addr)) = val;
 +}
 +
 +static inline void
-+grub_writel (grub_uint32_t val, grub_addr_t addr)
++grub_write32 (grub_uint32_t val, grub_addr_t addr)
 +{
 +  (*(volatile grub_uint32_t *) (addr)) = val;
 +}
 +
 +static inline void
-+grub_writeq (grub_uint64_t val, grub_addr_t addr)
++grub_write64 (grub_uint64_t val, grub_addr_t addr)
 +{
 +  (*(volatile grub_uint64_t *) (addr)) = val;
 +}
 +
 +#endif /* GRUB_I386_MMIO_H */
 diff --git a/include/grub/i386/msr.h b/include/grub/i386/msr.h
-index 1e838c022f41..b99c49f002ee 100644
+index 1e838c022f41..52c923ab94ac 100644
 --- a/include/grub/i386/msr.h
 +++ b/include/grub/i386/msr.h
 @@ -2,6 +2,9 @@
@@ -263,7 +268,7 @@ index 1e838c022f41..b99c49f002ee 100644
   *  GRUB is free software: you can redistribute it and/or modify
   *  it under the terms of the GNU General Public License as published by
   *  the Free Software Foundation, either version 3 of the License, or
-@@ -19,6 +22,62 @@
+@@ -19,6 +22,64 @@
  #ifndef GRUB_I386_MSR_H
  #define GRUB_I386_MSR_H 1
  
@@ -273,26 +278,30 @@ index 1e838c022f41..b99c49f002ee 100644
 +#define GRUB_MSR_X86_APICBASE		0x0000001b
 +#define GRUB_MSR_X86_APICBASE_BSP	(1<<8)
 +#define GRUB_MSR_X86_APICBASE_ENABLE	(1<<11)
-+#define GRUB_MSR_X86_APICBASE_BASE	(0xfffff<<12)
++#define GRUB_MSR_X86_APICBASE_BASE	(0xfffff<<12) /* Mask for APIC base address */
 +
 +#define GRUB_MSR_X86_FEATURE_CONTROL	0x0000003a
-+#define GRUB_MSR_X86_ENABLE_VMX_IN_SMX	(1<<1)
-+#define GRUB_MSR_X86_SENTER_FUNCTIONS	(0x7f<<8)
-+#define GRUB_MSR_X86_SENTER_ENABLE	(1<<15)
++#define GRUB_MSR_X86_FEATURE_CTRL_LOCK	(1<<0)     /* Lock writes to this register */
++#define GRUB_MSR_X86_ENABLE_VMX_IN_SMX	(1<<1)     /* Enable VMX inside SMX */
++#define GRUB_MSR_X86_ENABLE_VMX_OUT_SMX	(1<<2)     /* Enable VMX outside SMX */
++#define GRUB_MSR_X86_SENTER_FUNCTIONS	(0x7f<<8)  /* Bitmap of SENTER function enables */
++#define GRUB_MSR_X86_SENTER_ENABLE	(1<<15)    /* SENTER global enable */
 +
 +#define GRUB_MSR_X86_MTRRCAP		0x000000fe
-+#define GRUB_MSR_X86_VCNT_MASK		0xff
++#define GRUB_MSR_X86_VCNT_MASK		0xff       /* Number of variable MTRRs */
 +
 +#define GRUB_MSR_X86_MCG_CAP		0x00000179
-+#define GRUB_MSR_MCG_BANKCNT_MASK	0xff      /* Number of banks  */
++#define GRUB_MSR_MCG_BANKCNT_MASK	0xff       /* Number of banks */
 +#define GRUB_MSR_X86_MCG_STATUS		0x0000017a
-+#define GRUB_MSR_MCG_STATUS_MCIP	(1ULL<<2) /* MC in progress  */
++#define GRUB_MSR_MCG_STATUS_MCIP	(1ULL<<2)  /* MC in progress */
 +
 +#define GRUB_MSR_X86_MISC_ENABLE	0x000001a0
 +#define GRUB_MSR_X86_ENABLE_MONITOR_FSM	(1<<18)
 +
 +#define GRUB_MSR_X86_MTRR_PHYSBASE0	0x00000200
 +#define GRUB_MSR_X86_MTRR_PHYSMASK0	0x00000201
++#define GRUB_MSR_X86_MTRR_PHYSBASE(n)	(GRUB_MSR_X86_MTRR_PHYSBASE0 + 2 * (n))
++#define GRUB_MSR_X86_MTRR_PHYSMASK(n)	(GRUB_MSR_X86_MTRR_PHYSMASK0 + 2 * (n))
 +#define GRUB_MSR_X86_BASE_DEF_TYPE_MASK	0xff
 +#define GRUB_MSR_X86_MASK_VALID		(1<<11)
 +
@@ -303,16 +312,14 @@ index 1e838c022f41..b99c49f002ee 100644
 +
 +#define GRUB_MSR_X86_MC0_STATUS		0x00000401
 +
-+#define GRUB_MSR_X86_EFER		0xc0000080 /* Extended features  */
-+#define GRUB_MSR_EFER_LME		(1<<8)     /* Enable Long Mode/IA-32e  */
-+#define GRUB_MSR_EFER_LMA		(1<<10)    /* Long Mode/IA-32e Actuve  */
-+#define GRUB_MSR_EFER_SVME		(1<<12)    /* Enable SVM (AMD-V)  */
++#define GRUB_MSR_X86_EFER		0xc0000080 /* Extended features */
++#define GRUB_MSR_EFER_LME		(1<<8)     /* Enable Long Mode/IA-32e */
++#define GRUB_MSR_EFER_LMA		(1<<10)    /* Long Mode/IA-32e Active */
++#define GRUB_MSR_EFER_SVME		(1<<12)    /* Enable SVM (AMD-V) */
 +
 +/* AMD Specific */
-+#define GRUB_MSR_AMD64_PATCH_LEVEL	0x0000008b
-+#define GRUB_MSR_AMD64_PATCH_CLEAR	0xc0010021 /* AMD-specific microcode patch clear  */
-+#define GRUB_MSR_AMD64_VM_CR		0xc0010114
-+#define GRUB_MSR_SVM_VM_CR_SVM_DISABLE	4
++#define GRUB_MSR_AMD64_VM_CR		0xc0010114 /* SVM control register */
++#define GRUB_MSR_SVM_VM_CR_SVM_DISABLE	(1<<4)     /* Disable writes to EFER.SVME */
 +
 +/* MTRR Specific */
 +#define GRUB_MTRR_MEMORY_TYPE_UC	0
@@ -326,13 +333,77 @@ index 1e838c022f41..b99c49f002ee 100644
  #include <grub/err.h>
  #include <grub/i386/cpuid.h>
  #include <grub/types.h>
-@@ -71,4 +130,6 @@ grub_wrmsr (grub_uint32_t msr_id, grub_uint64_t msr_value)
+@@ -71,4 +132,6 @@ grub_wrmsr (grub_uint32_t msr_id, grub_uint64_t msr_value)
    asm volatile ("wrmsr" : : "c" (msr_id), "a" (low), "d" (high));
  }
  
 +#endif /* ASM_FILE */
 +
  #endif /* GRUB_I386_MSR_H */
+diff --git a/include/grub/i386/slaunch.h b/include/grub/i386/slaunch.h
+new file mode 100644
+index 000000000000..f7160d5fab0c
+--- /dev/null
++++ b/include/grub/i386/slaunch.h
+@@ -0,0 +1,58 @@
++/*
++ *  GRUB  --  GRand Unified Bootloader
++ *  Copyright (C) 2020  Oracle and/or its affiliates.
++ *
++ *  GRUB is free software: you can redistribute it and/or modify
++ *  it under the terms of the GNU General Public License as published by
++ *  the Free Software Foundation, either version 3 of the License, or
++ *  (at your option) any later version.
++ *
++ *  GRUB is distributed in the hope that it will be useful,
++ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
++ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ *  GNU General Public License for more details.
++ *
++ *  You should have received a copy of the GNU General Public License
++ *  along with GRUB.  If not, see <http://www.gnu.org/licenses/>.
++ *
++ *  Main secure launch definitions header file.
++ */
++
++#ifndef GRUB_I386_SLAUNCH_H
++#define GRUB_I386_SLAUNCH_H 1
++
++/* Secure launch platform types. */
++#define SLP_NONE	0
++#define SLP_INTEL_TXT	1
++
++#define GRUB_SLAUNCH_TPM_EVT_LOG_SIZE	(8 * GRUB_PAGE_SIZE)
++
++#ifndef ASM_FILE
++
++#include <grub/i386/linux.h>
++#include <grub/types.h>
++
++struct grub_slaunch_params
++{
++  grub_uint32_t boot_params_addr;
++  grub_uint32_t mle_start;
++  grub_uint32_t mle_size;
++  void *mle_ptab_mem;
++  grub_uint64_t mle_ptab_target;
++  grub_uint32_t mle_ptab_size;
++  grub_uint32_t mle_header_offset;
++  grub_uint32_t ap_wake_block;
++  grub_uint32_t ap_wake_block_size;
++  grub_uint32_t dce_base;
++  grub_uint32_t dce_size;
++  grub_uint64_t tpm_evt_log_base;
++  grub_uint32_t tpm_evt_log_size;
++};
++
++extern grub_uint32_t grub_slaunch_platform_type (void);
++extern void *grub_slaunch_module (void);
++extern struct grub_slaunch_params *grub_slaunch_params (void);
++
++#endif /* ASM_FILE */
++
++#endif /* GRUB_I386_SLAUNCH_H */
 -- 
-2.17.1
+2.41.0
 

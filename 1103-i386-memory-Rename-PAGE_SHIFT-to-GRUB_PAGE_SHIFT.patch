@@ -172,5 +172,5 @@ index 5cb607fb4667..7be57d6d7ecc 100644
  /* The flag for protected mode.  */
  #define GRUB_MEMORY_CPU_CR0_PE_ON		0x1
 -- 
-2.17.1
+2.41.0
 

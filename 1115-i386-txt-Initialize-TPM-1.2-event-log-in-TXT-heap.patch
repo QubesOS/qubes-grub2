@@ -1,4 +1,4 @@
-From 0b968b38a15412e81e85d97dd1d042cf459a8527 Mon Sep 17 00:00:00 2001
+From 66f7719aeccd92a418533444afdf771b0d1df6a4 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Micha=C5=82=20=C5=BBygowski?= <michal.zygowski@3mdeb.com>
 Date: Wed, 31 Aug 2022 14:37:49 +0200
 Subject: [PATCH] i386/txt: Initialize TPM 1.2 event log in TXT heap
@@ -9,31 +9,16 @@ Content-Transfer-Encoding: 8bit
 Signed-off-by: Michał Żygowski <michal.zygowski@3mdeb.com>
 Signed-off-by: Krystian Hebel <krystian.hebel@3mdeb.com>
 ---
- grub-core/loader/i386/linux.c   |  3 +-
- grub-core/loader/i386/txt/txt.c | 71 +++++++++++++++++++++++++++++++--
- include/grub/i386/txt.h         | 31 ++++++++++++++
- 3 files changed, 101 insertions(+), 4 deletions(-)
+ grub-core/loader/i386/txt/txt.c | 62 +++++++++++++++++++++++++++++++--
+ include/grub/i386/txt.h         | 31 +++++++++++++++++
+ 2 files changed, 91 insertions(+), 2 deletions(-)
 
-diff --git a/grub-core/loader/i386/linux.c b/grub-core/loader/i386/linux.c
-index 0ab2899f6774..7ef4b36fefc7 100644
---- a/grub-core/loader/i386/linux.c
-+++ b/grub-core/loader/i386/linux.c
-@@ -262,7 +262,8 @@ allocate_pages (grub_size_t prot_size, grub_size_t *align,
- 	slparams.tpm_evt_log_base = get_physical_target_address (ch);
- 	slparams.tpm_evt_log_size = GRUB_SLAUNCH_TPM_EVT_LOG_SIZE;
- 
--	grub_memset (get_virtual_current_address (ch), 0, slparams.tpm_evt_log_size);
-+	grub_txt_init_tpm_event_log (get_virtual_current_address (ch),
-+				     slparams.tpm_evt_log_size);
- 
- 	grub_dprintf ("linux", "tpm_evt_log_base = %lx, tpm_evt_log_size = %x\n",
- 		      (unsigned long) slparams.tpm_evt_log_base,
 diff --git a/grub-core/loader/i386/txt/txt.c b/grub-core/loader/i386/txt/txt.c
-index 18eb4fd1bf15..c17c2f29ae12 100644
+index 24311c0cf2bd..ecc0c03580f6 100644
 --- a/grub-core/loader/i386/txt/txt.c
 +++ b/grub-core/loader/i386/txt/txt.c
-@@ -511,6 +511,32 @@ set_mtrrs_for_acmod (struct grub_txt_acm_header *hdr)
-   return GRUB_ERR_NONE;
+@@ -520,6 +520,32 @@ set_mtrrs_for_acmod (struct grub_txt_acm_header *hdr)
+   return err;
  }
  
 +void
@@ -44,7 +29,7 @@ index 18eb4fd1bf15..c17c2f29ae12 100644
 +  if (buf == NULL || size == 0)
 +    return;
 +
-+  /* For TPM2 just clear the area, only TPM12 requires initialization. */
++  /* For TPM 2.0 just clear the area, only TPM 1.2 requires initialization. */
 +  grub_memset (buf, 0, size);
 +
 +  if (grub_get_tpm_ver () != GRUB_TPM_12)
@@ -62,30 +47,24 @@ index 18eb4fd1bf15..c17c2f29ae12 100644
 +  elog->next_event_offset = sizeof(*elog);
 +}
 +
- static grub_err_t
- init_txt_heap (struct grub_slaunch_params *slparams, struct grub_txt_acm_header *sinit)
- {
-@@ -520,6 +546,7 @@ init_txt_heap (struct grub_slaunch_params *slparams, struct grub_txt_acm_header
-   struct grub_txt_os_mle_data *os_mle_data;
-   struct grub_txt_os_sinit_data *os_sinit_data;
-   struct grub_txt_heap_end_element *heap_end_element;
-+  struct grub_txt_heap_tpm_event_log_element *heap_tpm_event_log_element;
-   struct grub_txt_heap_event_log_pointer2_1_element *heap_event_log_pointer2_1_element;
- #ifdef GRUB_MACHINE_EFI
-   struct grub_acpi_rsdp_v20 *rsdp;
-@@ -613,10 +640,31 @@ init_txt_heap (struct grub_slaunch_params *slparams, struct grub_txt_acm_header
+ /* Adds new element to the end. `size` does not include common header. */
+ /* Assume that heap was cleared and there is enough space to add the element. */
+ static inline struct grub_txt_heap_ext_data_element *
+@@ -658,6 +684,8 @@ init_txt_heap (struct grub_slaunch_params *slparams, struct grub_txt_acm_header
  
    sinit_caps = grub_txt_get_sinit_capabilities (sinit);
  
--  /* CBnT bits 5:4 must be 11b, since D/A mapping is the only one supported. */
 +  grub_dprintf ("slaunch", "SINIT capabilities %08x\n", sinit_caps);
 +
-   os_sinit_data->capabilities = GRUB_TXT_CAPS_TPM_12_NO_LEGACY_PCR_USAGE |
- 				GRUB_TXT_CAPS_TPM_12_AUTH_PCR_USAGE;
+   /*
+    * In the latest TXT Software Development Guide as of now (April 2023,
+    * Revision 017.4) bits 4 and 5 (used to be "no legacy PCR usage" and
+@@ -672,6 +700,25 @@ init_txt_heap (struct grub_slaunch_params *slparams, struct grub_txt_acm_header
+    */
+   os_sinit_data->capabilities = GRUB_TXT_CAPS_TPM_12_AUTH_PCR_USAGE;
  
 +  if (grub_get_tpm_ver () == GRUB_TPM_20)
 +    {
-+      /* CBnT bits 5:4 must be 11b, since D/A mapping is the only one supported. */
 +      if ((sinit_caps & os_sinit_data->capabilities) != os_sinit_data->capabilities)
 +        return grub_error (GRUB_ERR_BAD_ARGUMENT,
 +               N_("Details/authorities PCR usage is not supported"));
@@ -103,10 +82,10 @@ index 18eb4fd1bf15..c17c2f29ae12 100644
 +	}
 +    }
 +
-   /* Choose monitor RLP wakeup mechanism first. */
-   if (sinit_caps & GRUB_TXT_CAPS_MONITOR_SUPPORT)
-     os_sinit_data->capabilities |= GRUB_TXT_CAPS_MONITOR_SUPPORT;
-@@ -629,10 +677,27 @@ init_txt_heap (struct grub_slaunch_params *slparams, struct grub_txt_acm_header
+   /*
+    * APs (application processors) can't be brought up by usual INIT-SIPI-SIPI
+    * sequence after Measured Launch, otherwise the MLE integrity is lost.
+@@ -688,10 +735,21 @@ init_txt_heap (struct grub_slaunch_params *slparams, struct grub_txt_acm_header
      os_sinit_data->capabilities |= GRUB_TXT_CAPS_ECX_PT_SUPPORT;
  
    if (grub_get_tpm_ver () == GRUB_TPM_12)
@@ -118,16 +97,10 @@ index 18eb4fd1bf15..c17c2f29ae12 100644
 +      os_sinit_data->flags = GRUB_TXT_PCR_EXT_MAX_PERF_POLICY;
 +      os_sinit_data->version = OS_SINIT_DATA_TPM_12_VER;
 +
-+      heap_tpm_event_log_element = (struct grub_txt_heap_tpm_event_log_element *)
-+                                   os_sinit_data->ext_data_elts;
-+      heap_tpm_event_log_element->type = GRUB_TXT_HEAP_EXTDATA_TYPE_TPM_EVENT_LOG_PTR;
-+      heap_tpm_event_log_element->size = sizeof (*heap_tpm_event_log_element);
-+      heap_tpm_event_log_element->event_log_phys_addr = slparams->tpm_evt_log_base;
-+
-+      heap_end_element = (struct grub_txt_heap_end_element *)
-+  ((grub_addr_t) heap_tpm_event_log_element + heap_tpm_event_log_element->size);
-+      heap_end_element->type = GRUB_TXT_HEAP_EXTDATA_TYPE_END;
-+      heap_end_element->size = sizeof (*heap_end_element);
++      elt = add_ext_data_elt(os_sinit_data,
++                             GRUB_TXT_HEAP_EXTDATA_TYPE_TPM_EVENT_LOG_PTR,
++                             sizeof (struct grub_txt_heap_tpm_event_log_element));
++      elt->tpm_event_log.event_log_phys_addr = slparams->tpm_evt_log_base;
 +    }
    else
      {
@@ -137,7 +110,7 @@ index 18eb4fd1bf15..c17c2f29ae12 100644
  	return grub_error (GRUB_ERR_BAD_ARGUMENT,
  			   N_("original TXT TPM 2.0 event log format is not supported"));
 diff --git a/include/grub/i386/txt.h b/include/grub/i386/txt.h
-index 7a54632bede9..0d2ca5b298c1 100644
+index d8598e259a77..5e3e6086d0d7 100644
 --- a/include/grub/i386/txt.h
 +++ b/include/grub/i386/txt.h
 @@ -22,6 +22,7 @@
@@ -148,10 +121,11 @@ index 7a54632bede9..0d2ca5b298c1 100644
  #include <grub/types.h>
  #include <grub/i386/memory.h>
  #include <grub/i386/mmio.h>
-@@ -465,6 +466,34 @@ struct grub_txt_heap_event_log_ptr_elt2_1
-   grub_uint32_t next_record_offset;
+@@ -701,6 +702,34 @@ struct grub_smx_parameters
+   grub_uint32_t txt_feature_ext_flags;
  } GRUB_PACKED;
  
++/* Structures and constants used for TPM 1.2 event log initialization */
 +struct tpm12_pcr_event {
 +    grub_uint32_t pcr_index;
 +    grub_uint32_t type;
@@ -160,7 +134,7 @@ index 7a54632bede9..0d2ca5b298c1 100644
 +    grub_uint8_t data[];
 +} GRUB_PACKED;
 +
-+#define EVTLOG_SIGNATURE "TXT Event Container\0"
++#define EVTLOG_SIGNATURE "TXT Event Container"
 +#define EVTLOG_CNTNR_MAJOR_VER 1
 +#define EVTLOG_CNTNR_MINOR_VER 0
 +#define EVTLOG_EVT_MAJOR_VER 1
@@ -179,11 +153,10 @@ index 7a54632bede9..0d2ca5b298c1 100644
 +    struct tpm12_pcr_event pcr_events[];
 +} GRUB_PACKED;
 +
-+
- /* TXT register and heap access */
+ extern grub_uint32_t grub_txt_supported_os_sinit_data_ver (struct grub_txt_acm_header* hdr);
  
- static inline grub_uint8_t
-@@ -692,6 +721,8 @@ extern struct grub_txt_acm_header* grub_txt_sinit_select (struct grub_txt_acm_he
+ extern grub_uint32_t grub_txt_get_sinit_capabilities (struct grub_txt_acm_header* hdr);
+@@ -714,6 +743,8 @@ extern struct grub_txt_acm_header* grub_txt_sinit_select (struct grub_txt_acm_he
  extern grub_err_t grub_txt_verify_platform (void);
  extern grub_err_t grub_txt_prepare_cpu (void);
  
@@ -193,5 +166,5 @@ index 7a54632bede9..0d2ca5b298c1 100644
  extern void grub_txt_setup_mle_ptab (struct grub_slaunch_params *slparams);
  
 -- 
-2.17.1
+2.41.0
 

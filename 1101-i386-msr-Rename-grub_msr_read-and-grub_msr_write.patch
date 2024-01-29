@@ -62,5 +62,5 @@ index 7b52b5d61229..4fba1b8e0d04 100644
    grub_uint32_t low = msr_value, high = msr_value >> 32;
  
 -- 
-2.17.1
+2.41.0
 
