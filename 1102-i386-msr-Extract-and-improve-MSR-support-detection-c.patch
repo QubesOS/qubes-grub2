@@ -1,0 +1,136 @@
+From 52d63e5e45eaf8df9a81a453459fd89fbf898969 Mon Sep 17 00:00:00 2001
+From: Daniel Kiper <daniel.kiper@oracle.com>
+Date: Sat, 25 Apr 2020 16:43:52 +0200
+Subject: [PATCH] i386/msr: Extract and improve MSR support detection code
+
+Currently rdmsr and wrmsr commands have own MSR support detection code.
+This code is the same. So, it is duplicated. Additionally, this code
+cannot be reused by others. Hence, extract this code to a function and
+make it public. By the way, improve a code a bit.
+
+Additionally, use GRUB_ERR_BAD_DEVICE instead of GRUB_ERR_BUG to signal
+an error because errors encountered by this new routine are not bugs.
+
+Signed-off-by: Daniel Kiper <daniel.kiper@oracle.com>
+---
+ grub-core/commands/i386/rdmsr.c | 21 +++++----------------
+ grub-core/commands/i386/wrmsr.c | 21 +++++----------------
+ include/grub/i386/msr.h         | 29 +++++++++++++++++++++++++++++
+ 3 files changed, 39 insertions(+), 32 deletions(-)
+
+diff --git a/grub-core/commands/i386/rdmsr.c b/grub-core/commands/i386/rdmsr.c
+index 89ece7657f27..2e42f6197648 100644
+--- a/grub-core/commands/i386/rdmsr.c
++++ b/grub-core/commands/i386/rdmsr.c
+@@ -42,27 +42,16 @@ static const struct grub_arg_option options[] =
+ static grub_err_t
+ grub_cmd_msr_read (grub_extcmd_context_t ctxt, int argc, char **argv)
+ {
+-  grub_uint32_t manufacturer[3], max_cpuid, a, b, c, features, addr;
++  grub_err_t err;
++  grub_uint32_t addr;
+   grub_uint64_t value;
+   const char *ptr;
+   char buf[sizeof("1122334455667788")];
+ 
+-  /*
+-   * The CPUID instruction should be used to determine whether MSRs
+-   * are supported. (CPUID.01H:EDX[5] = 1)
+-   */
+-  if (! grub_cpu_is_cpuid_supported ())
+-    return grub_error (GRUB_ERR_BUG, N_("unsupported instruction"));
++  err = grub_cpu_is_msr_supported ();
+ 
+-  grub_cpuid (0, max_cpuid, manufacturer[0], manufacturer[2], manufacturer[1]);
+-
+-  if (max_cpuid < 1)
+-    return grub_error (GRUB_ERR_BUG, N_("unsupported instruction"));
+-
+-  grub_cpuid (1, a, b, c, features);
+-
+-  if (!(features & (1 << 5)))
+-    return grub_error (GRUB_ERR_BUG, N_("unsupported instruction"));
++  if (err != GRUB_ERR_NONE)
++    return grub_error (err, N_("RDMSR is unsupported"));
+ 
+   if (argc != 1)
+     return grub_error (GRUB_ERR_BAD_ARGUMENT, N_("one argument expected"));
+diff --git a/grub-core/commands/i386/wrmsr.c b/grub-core/commands/i386/wrmsr.c
+index cf6bf6c8fe43..7fbedaed95ba 100644
+--- a/grub-core/commands/i386/wrmsr.c
++++ b/grub-core/commands/i386/wrmsr.c
+@@ -36,26 +36,15 @@ static grub_command_t cmd_write;
+ static grub_err_t
+ grub_cmd_msr_write (grub_command_t cmd __attribute__ ((unused)), int argc, char **argv)
+ {
+-  grub_uint32_t manufacturer[3], max_cpuid, a, b, c, features, addr;
++  grub_err_t err;
++  grub_uint32_t addr;
+   grub_uint64_t value;
+   const char *ptr;
+ 
+-  /*
+-   * The CPUID instruction should be used to determine whether MSRs
+-   * are supported. (CPUID.01H:EDX[5] = 1)
+-   */
+-  if (!grub_cpu_is_cpuid_supported ())
+-    return grub_error (GRUB_ERR_BUG, N_("unsupported instruction"));
++  err = grub_cpu_is_msr_supported ();
+ 
+-  grub_cpuid (0, max_cpuid, manufacturer[0], manufacturer[2], manufacturer[1]);
+-
+-  if (max_cpuid < 1)
+-    return grub_error (GRUB_ERR_BUG, N_("unsupported instruction"));
+-
+-  grub_cpuid (1, a, b, c, features);
+-
+-  if (!(features & (1 << 5)))
+-    return grub_error (GRUB_ERR_BUG, N_("unsupported instruction"));
++  if (err != GRUB_ERR_NONE)
++    return grub_error (err, N_("WRMSR is unsupported"));
+ 
+   if (argc != 2)
+     return grub_error (GRUB_ERR_BAD_ARGUMENT, N_("two arguments expected"));
+diff --git a/include/grub/i386/msr.h b/include/grub/i386/msr.h
+index 4fba1b8e0d04..1e838c022f41 100644
+--- a/include/grub/i386/msr.h
++++ b/include/grub/i386/msr.h
+@@ -19,6 +19,35 @@
+ #ifndef GRUB_I386_MSR_H
+ #define GRUB_I386_MSR_H 1
+ 
++#include <grub/err.h>
++#include <grub/i386/cpuid.h>
++#include <grub/types.h>
++
++static inline grub_err_t
++grub_cpu_is_msr_supported (void)
++{
++  grub_uint32_t eax, ebx, ecx, edx;
++
++  /*
++   * The CPUID instruction should be used to determine whether MSRs
++   * are supported, CPUID.01H:EDX[5] = 1.
++   */
++  if (!grub_cpu_is_cpuid_supported ())
++    return GRUB_ERR_BAD_DEVICE;
++
++  grub_cpuid (0, eax, ebx, ecx, edx);
++
++  if (eax < 1)
++    return GRUB_ERR_BAD_DEVICE;
++
++  grub_cpuid (1, eax, ebx, ecx, edx);
++
++  if (!(edx & (1 << 5)))
++    return GRUB_ERR_BAD_DEVICE;
++
++  return GRUB_ERR_NONE;
++}
++
+ /*
+  * TODO: Add a general protection exception handler.
+  *       Accessing a reserved or unimplemented MSR address results in a GP#.
+-- 
+2.41.0
+

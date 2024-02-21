@@ -1,0 +1,66 @@
+From 462af28050122f87412237abd8000f3667a5d3be Mon Sep 17 00:00:00 2001
+From: Daniel Kiper <daniel.kiper@oracle.com>
+Date: Tue, 17 Dec 2019 20:02:37 +0100
+Subject: [PATCH] i386/msr: Rename grub_msr_read() and grub_msr_write()
+
+... to grub_rdmsr() and grub_wrmsr() respectively. New names are more
+obvious than older ones.
+
+Signed-off-by: Daniel Kiper <daniel.kiper@oracle.com>
+---
+ grub-core/commands/i386/rdmsr.c | 2 +-
+ grub-core/commands/i386/wrmsr.c | 2 +-
+ include/grub/i386/msr.h         | 4 ++--
+ 3 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/grub-core/commands/i386/rdmsr.c b/grub-core/commands/i386/rdmsr.c
+index fa4622f9e8a1..89ece7657f27 100644
+--- a/grub-core/commands/i386/rdmsr.c
++++ b/grub-core/commands/i386/rdmsr.c
+@@ -76,7 +76,7 @@ grub_cmd_msr_read (grub_extcmd_context_t ctxt, int argc, char **argv)
+   if (*ptr != '\0')
+     return grub_error (GRUB_ERR_BAD_ARGUMENT, N_("invalid argument"));
+ 
+-  value = grub_msr_read (addr);
++  value = grub_rdmsr (addr);
+ 
+   if (ctxt->state[0].set)
+     {
+diff --git a/grub-core/commands/i386/wrmsr.c b/grub-core/commands/i386/wrmsr.c
+index 8f352f205ffd..cf6bf6c8fe43 100644
+--- a/grub-core/commands/i386/wrmsr.c
++++ b/grub-core/commands/i386/wrmsr.c
+@@ -77,7 +77,7 @@ grub_cmd_msr_write (grub_command_t cmd __attribute__ ((unused)), int argc, char
+   if (*ptr != '\0')
+     return grub_error (GRUB_ERR_BAD_ARGUMENT, N_("invalid argument"));
+ 
+-  grub_msr_write (addr, value);
++  grub_wrmsr (addr, value);
+ 
+   return GRUB_ERR_NONE;
+ }
+diff --git a/include/grub/i386/msr.h b/include/grub/i386/msr.h
+index 7b52b5d61229..4fba1b8e0d04 100644
+--- a/include/grub/i386/msr.h
++++ b/include/grub/i386/msr.h
+@@ -25,7 +25,7 @@
+  */
+ 
+ static inline grub_uint64_t
+-grub_msr_read (grub_uint32_t msr_id)
++grub_rdmsr (grub_uint32_t msr_id)
+ {
+   grub_uint32_t low, high;
+ 
+@@ -35,7 +35,7 @@ grub_msr_read (grub_uint32_t msr_id)
+ }
+ 
+ static inline void
+-grub_msr_write(grub_uint32_t msr_id, grub_uint64_t msr_value)
++grub_wrmsr (grub_uint32_t msr_id, grub_uint64_t msr_value)
+ {
+   grub_uint32_t low = msr_value, high = msr_value >> 32;
+ 
+-- 
+2.41.0
+

@@ -1,0 +1,133 @@
+From b965e567652ec8eb8bde2cd6f79b4ef02fdb0fa4 Mon Sep 17 00:00:00 2001
+From: Daniel Kiper <daniel.kiper@oracle.com>
+Date: Tue, 17 Dec 2019 17:51:29 +0100
+Subject: [PATCH] i386/msr: Merge rdmsr.h and wrmsr.h into msr.h
+
+It does not make sense to have separate headers for separate static
+functions. Additionally, we have to add some constants with MSR addresses
+in subsequent patches. So, make one common place to store them.
+
+Signed-off-by: Daniel Kiper <daniel.kiper@oracle.com>
+---
+ grub-core/commands/i386/rdmsr.c      |  2 +-
+ grub-core/commands/i386/wrmsr.c      |  2 +-
+ include/grub/i386/{wrmsr.h => msr.h} | 16 +++++++++---
+ include/grub/i386/rdmsr.h            | 37 ----------------------------
+ 4 files changed, 15 insertions(+), 42 deletions(-)
+ rename include/grub/i386/{wrmsr.h => msr.h} (78%)
+ delete mode 100644 include/grub/i386/rdmsr.h
+
+diff --git a/grub-core/commands/i386/rdmsr.c b/grub-core/commands/i386/rdmsr.c
+index 46c4346da1b6..fa4622f9e8a1 100644
+--- a/grub-core/commands/i386/rdmsr.c
++++ b/grub-core/commands/i386/rdmsr.c
+@@ -26,7 +26,7 @@
+ #include <grub/extcmd.h>
+ #include <grub/i18n.h>
+ #include <grub/i386/cpuid.h>
+-#include <grub/i386/rdmsr.h>
++#include <grub/i386/msr.h>
+ 
+ GRUB_MOD_LICENSE("GPLv3+");
+ 
+diff --git a/grub-core/commands/i386/wrmsr.c b/grub-core/commands/i386/wrmsr.c
+index 1b143b8882a4..8f352f205ffd 100644
+--- a/grub-core/commands/i386/wrmsr.c
++++ b/grub-core/commands/i386/wrmsr.c
+@@ -27,7 +27,7 @@
+ #include <grub/lockdown.h>
+ #include <grub/i18n.h>
+ #include <grub/i386/cpuid.h>
+-#include <grub/i386/wrmsr.h>
++#include <grub/i386/msr.h>
+ 
+ GRUB_MOD_LICENSE("GPLv3+");
+ 
+diff --git a/include/grub/i386/wrmsr.h b/include/grub/i386/msr.h
+similarity index 78%
+rename from include/grub/i386/wrmsr.h
+rename to include/grub/i386/msr.h
+index dea60aed1fc0..7b52b5d61229 100644
+--- a/include/grub/i386/wrmsr.h
++++ b/include/grub/i386/msr.h
+@@ -16,14 +16,24 @@
+  *  along with GRUB.  If not, see <http://www.gnu.org/licenses/>.
+  */
+ 
+-#ifndef GRUB_WRMSR_H
+-#define GRUB_WRMSR_H 1
++#ifndef GRUB_I386_MSR_H
++#define GRUB_I386_MSR_H 1
+ 
+ /*
+  * TODO: Add a general protection exception handler.
+  *       Accessing a reserved or unimplemented MSR address results in a GP#.
+  */
+ 
++static inline grub_uint64_t
++grub_msr_read (grub_uint32_t msr_id)
++{
++  grub_uint32_t low, high;
++
++  asm volatile ("rdmsr" : "=a" (low), "=d" (high) : "c" (msr_id));
++
++  return ((grub_uint64_t) high << 32) | low;
++}
++
+ static inline void
+ grub_msr_write(grub_uint32_t msr_id, grub_uint64_t msr_value)
+ {
+@@ -32,4 +42,4 @@ grub_msr_write(grub_uint32_t msr_id, grub_uint64_t msr_value)
+   asm volatile ("wrmsr" : : "c" (msr_id), "a" (low), "d" (high));
+ }
+ 
+-#endif /* GRUB_WRMSR_H */
++#endif /* GRUB_I386_MSR_H */
+diff --git a/include/grub/i386/rdmsr.h b/include/grub/i386/rdmsr.h
+deleted file mode 100644
+index c0a0c717a0e9..000000000000
+--- a/include/grub/i386/rdmsr.h
++++ /dev/null
+@@ -1,37 +0,0 @@
+-/*
+- *  GRUB  --  GRand Unified Bootloader
+- *  Copyright (C) 2019  Free Software Foundation, Inc.
+- *
+- *  GRUB is free software: you can redistribute it and/or modify
+- *  it under the terms of the GNU General Public License as published by
+- *  the Free Software Foundation, either version 3 of the License, or
+- *  (at your option) any later version.
+- *
+- *  GRUB is distributed in the hope that it will be useful,
+- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+- *  GNU General Public License for more details.
+- *
+- *  You should have received a copy of the GNU General Public License
+- *  along with GRUB.  If not, see <http://www.gnu.org/licenses/>.
+- */
+-
+-#ifndef GRUB_RDMSR_H
+-#define GRUB_RDMSR_H 1
+-
+-/*
+- * TODO: Add a general protection exception handler.
+- *       Accessing a reserved or unimplemented MSR address results in a GP#.
+- */
+-
+-static inline grub_uint64_t
+-grub_msr_read (grub_uint32_t msr_id)
+-{
+-  grub_uint32_t low, high;
+-
+-  asm volatile ("rdmsr" : "=a" (low), "=d" (high) : "c" (msr_id));
+-
+-  return ((grub_uint64_t)high << 32) | low;
+-}
+-
+-#endif /* GRUB_RDMSR_H */
+
+base-commit: ae94b97be2b81b625d6af6654d3ed79078b50ff6
+-- 
+2.41.0
+
