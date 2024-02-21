@@ -1,4 +1,4 @@
-From d75283aa6950fea8ac579735fe4528083b3932bb Mon Sep 17 00:00:00 2001
+From b3a5c6f2f404ecd814a938fa643a114d71fdd752 Mon Sep 17 00:00:00 2001
 From: Ross Philipson <ross.philipson@oracle.com>
 Date: Wed, 7 Aug 2019 14:46:17 -0400
 Subject: [PATCH] i386/txt: Add Intel TXT verification routines
@@ -7,16 +7,16 @@ Signed-off-by: Ross Philipson <ross.philipson@oracle.com>
 Signed-off-by: Daniel Kiper <daniel.kiper@oracle.com>
 Signed-off-by: Krystian Hebel <krystian.hebel@3mdeb.com>
 ---
- grub-core/loader/i386/txt/verify.c | 269 +++++++++++++++++++++++++++++
- 1 file changed, 269 insertions(+)
+ grub-core/loader/i386/txt/verify.c | 278 +++++++++++++++++++++++++++++
+ 1 file changed, 278 insertions(+)
  create mode 100644 grub-core/loader/i386/txt/verify.c
 
 diff --git a/grub-core/loader/i386/txt/verify.c b/grub-core/loader/i386/txt/verify.c
 new file mode 100644
-index 000000000000..e8acb7da022f
+index 000000000000..5205c931c35b
 --- /dev/null
 +++ b/grub-core/loader/i386/txt/verify.c
-@@ -0,0 +1,269 @@
+@@ -0,0 +1,278 @@
 +/*
 + * verify.c: verify that platform and processor supports Intel(r) TXT
 + *
@@ -108,7 +108,7 @@ index 000000000000..e8acb7da022f
 +  if ( elt->size < GRUB_TXT_HEAP_ELEMENT_HEADER_SIZE +
 +                   sizeof(struct grub_txt_heap_acm_element) ||
 +       grub_mul (elt->acm.num_acms, sizeof(grub_uint64_t), &acm_addrs_size) ||
-+       elt->size != GRUB_TXT_HEAP_ELEMENT_HEADER_SIZE + sizeof(elt->acm) +
++       elt->size - (GRUB_TXT_HEAP_ELEMENT_HEADER_SIZE + sizeof(elt->acm)) !=
 +                    acm_addrs_size )
 +    return grub_error (GRUB_ERR_OUT_OF_RANGE,
 +                N_("HEAP_ACM element has wrong size (%d)"),
@@ -162,7 +162,8 @@ index 000000000000..e8acb7da022f
 +  for ( ; ; )
 +    {
 +      if ( elts_size < GRUB_TXT_HEAP_ELEMENT_HEADER_SIZE ||
-+           elts_size < elt->size || elt->size == 0 )
++           elt->size < GRUB_TXT_HEAP_ELEMENT_HEADER_SIZE ||
++           elts_size < elt->size )
 +        return grub_error (GRUB_ERR_OUT_OF_RANGE,
 +                    N_("TXT heap invalid element size: type: %d, size: %d"),
 +                    elt->type, elt->size);
@@ -237,32 +238,33 @@ index 000000000000..e8acb7da022f
 +   * Eventually need the verify_IA32_se_svn_status routine to be called here.
 +   */
 +
-+  errorcode = grub_txt_reg_pub_readl (GRUB_TXT_ERRORCODE);
++  errorcode = grub_txt_reg_pub_read32 (GRUB_TXT_ERRORCODE);
 +  /* 0 - no previous SENTER, 0xC0000001 - previous SENTER succeeded */
 +  if ( errorcode != 0 && errorcode != 0xC0000001 )
 +     return grub_error (GRUB_ERR_BAD_DEVICE,
 +			N_("TXT_ERRORCODE reports failure: 0x%08" PRIxGRUB_UINT32_T),
 +			errorcode);
 +
-+  if (grub_txt_reg_pub_readb (GRUB_TXT_ESTS) & GRUB_TXT_ESTS_TXT_RESET)
++  if (grub_txt_reg_pub_read8 (GRUB_TXT_ESTS) & GRUB_TXT_ESTS_TXT_RESET)
 +     return grub_error (GRUB_ERR_BAD_DEVICE,
 +			N_("TXT_RESET.STS is set and GETSEC[SENTER] is disabled"));
 +
 +  /*
 +   * Verify that the BIOS information in the TXT heap that was setup by the
-+   * BIOS ACM is sane.
++   * BIOS ACM is reasonable.
 +   */
 +
 +  txt_heap = grub_txt_get_heap ();
-+  heap_base = grub_txt_reg_pub_readl (GRUB_TXT_HEAP_BASE);
-+  heap_size = grub_txt_reg_pub_readl (GRUB_TXT_HEAP_SIZE);
++  heap_base = grub_txt_reg_pub_read32 (GRUB_TXT_HEAP_BASE);
++  heap_size = grub_txt_reg_pub_read32 (GRUB_TXT_HEAP_SIZE);
 +
 +  if ( txt_heap == NULL || heap_base == 0 || heap_size == 0 )
 +     return grub_error (GRUB_ERR_BAD_DEVICE,
 +                 N_("TXT heap is not configured correctly"));
 +
 +  bios_size = grub_txt_bios_data_size (txt_heap);
-+  if ( bios_size < sizeof (grub_uint64_t) || bios_size > heap_size )
++  if ( bios_size < sizeof (grub_uint64_t) + sizeof (*bios_data) ||
++       bios_size > heap_size )
 +     return grub_error (GRUB_ERR_OUT_OF_RANGE,
 +                 N_("invalid size of the TXT heap BIOS data table"));
 +
@@ -278,9 +280,16 @@ index 000000000000..e8acb7da022f
 +                 N_("BIOS reports too many CPUs for secure launch (%d)"),
 +                 bios_data->num_logical_procs);
 +
++  /*
++   * grub_uint32_t mle_flags is supposed to be added in version 5, however, the
++   * only ACM in 630744_003 package that is version 4 (Sandy Bridge & Ivy Bridge
++   * SNB_IVB_SINIT_20190708_PW.bin) seems to also have this field, or at least
++   * a placeholder for it.
++   */
 +  if ( bios_data->version >= 4 && bios_size > sizeof(*bios_data) + sizeof(bios_size) )
 +    {
-+      elts = (struct grub_txt_heap_ext_data_element *) ((grub_uint8_t *)bios_data + sizeof(*bios_data));
++      elts = (struct grub_txt_heap_ext_data_element *) ((grub_uint8_t *)bios_data +
++                                                        sizeof(*bios_data));
 +      err = verify_ext_data_elts(elts, bios_size - sizeof(*bios_data));
 +    }
 +

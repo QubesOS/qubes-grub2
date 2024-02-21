@@ -1,4 +1,4 @@
-From 916454efb00b14fa85bf529fa0575e99b9d484fb Mon Sep 17 00:00:00 2001
+From cf61e4e0ca2f76b6b306bf3e88faac028e427b12 Mon Sep 17 00:00:00 2001
 From: Ross Philipson <ross.philipson@oracle.com>
 Date: Wed, 7 Aug 2019 15:01:00 -0400
 Subject: [PATCH] i386/slaunch: Add secure launch framework and commands
@@ -12,14 +12,14 @@ Signed-off-by: Krystian Hebel <krystian.hebel@3mdeb.com>
  grub-core/lib/i386/relocator32.S             |   8 +
  grub-core/loader/i386/bsd.c                  |   4 +
  grub-core/loader/i386/coreboot/chainloader.c |   2 +
- grub-core/loader/i386/linux.c                | 315 ++++++++++++++++++-
+ grub-core/loader/i386/linux.c                | 320 ++++++++++++++++++-
  grub-core/loader/i386/pc/plan9.c             |   3 +-
- grub-core/loader/i386/slaunch.c              | 299 ++++++++++++++++++
+ grub-core/loader/i386/slaunch.c              | 304 ++++++++++++++++++
  grub-core/loader/i386/xnu.c                  |   3 +
  grub-core/loader/multiboot.c                 |   5 +
  include/grub/file.h                          |   3 +
  include/grub/i386/linux.h                    |  14 +-
- 12 files changed, 660 insertions(+), 17 deletions(-)
+ 12 files changed, 670 insertions(+), 17 deletions(-)
  create mode 100644 grub-core/loader/i386/slaunch.c
 
 diff --git a/grub-core/Makefile.am b/grub-core/Makefile.am
@@ -174,7 +174,7 @@ index 0a19ebb9c3e5..dccd86b07bde 100644
  }
  
 diff --git a/grub-core/loader/i386/linux.c b/grub-core/loader/i386/linux.c
-index 9f74a96b19ae..18485e9b1766 100644
+index 9f74a96b19ae..bf3878ab91e2 100644
 --- a/grub-core/loader/i386/linux.c
 +++ b/grub-core/loader/i386/linux.c
 @@ -34,9 +34,12 @@
@@ -236,7 +236,7 @@ index 9f74a96b19ae..18485e9b1766 100644
  static inline grub_size_t
  page_align (grub_size_t size)
  {
-@@ -150,11 +173,36 @@ allocate_pages (grub_size_t prot_size, grub_size_t *align,
+@@ -150,11 +173,37 @@ allocate_pages (grub_size_t prot_size, grub_size_t *align,
  		grub_uint64_t preferred_address)
  {
    grub_err_t err;
@@ -249,13 +249,14 @@ index 9f74a96b19ae..18485e9b1766 100644
 -  prot_size = page_align (prot_size);
 +  if (grub_slaunch_platform_type () == SLP_INTEL_TXT)
 +    {
-+      prot_size = ALIGN_UP (prot_size, GRUB_TXT_PMR_ALIGN);
-+
 +      if (prot_size > GRUB_TXT_MLE_MAX_SIZE)
 +	{
 +	  err = GRUB_ERR_OUT_OF_RANGE;
 +	  goto fail;
 +	}
++
++      /* Check performed above makes sure that this doesn't overflow. */
++      prot_size = ALIGN_UP (prot_size, GRUB_TXT_PMR_ALIGN);
 +
 +      slparams->mle_ptab_size = grub_txt_get_mle_ptab_size (prot_size);
 +      slparams->mle_ptab_size = ALIGN_UP (slparams->mle_ptab_size, GRUB_TXT_PMR_ALIGN);
@@ -274,7 +275,7 @@ index 9f74a96b19ae..18485e9b1766 100644
  
    /* Initialize the memory pointers with NULL for convenience.  */
    free_pages ();
-@@ -176,7 +224,7 @@ allocate_pages (grub_size_t prot_size, grub_size_t *align,
+@@ -176,7 +225,7 @@ allocate_pages (grub_size_t prot_size, grub_size_t *align,
  	err = grub_relocator_alloc_chunk_align (relocator, &ch,
  						preferred_address,
  						preferred_address,
@@ -283,7 +284,7 @@ index 9f74a96b19ae..18485e9b1766 100644
  						GRUB_RELOCATOR_PREFERENCE_LOW,
  						1);
  	for (; err && *align + 1 > min_align; (*align)--)
-@@ -194,11 +242,65 @@ allocate_pages (grub_size_t prot_size, grub_size_t *align,
+@@ -194,11 +243,65 @@ allocate_pages (grub_size_t prot_size, grub_size_t *align,
      else
        err = grub_relocator_alloc_chunk_addr (relocator, &ch,
  					     preferred_address,
@@ -350,7 +351,7 @@ index 9f74a96b19ae..18485e9b1766 100644
    }
  
    grub_dprintf ("linux", "prot_mode_mem = %p, prot_mode_target = %lx, prot_size = %x\n",
-@@ -286,7 +388,7 @@ grub_linux_setup_video (struct linux_kernel_params *params)
+@@ -286,7 +389,7 @@ grub_linux_setup_video (struct linux_kernel_params *params)
  	  params->lfb_size >>= 16;
  	  params->have_vga = GRUB_VIDEO_LINUX_TYPE_VESA;
  	  break;
@@ -359,7 +360,7 @@ index 9f74a96b19ae..18485e9b1766 100644
  	case GRUB_VIDEO_DRIVER_EFI_UGA:
  	case GRUB_VIDEO_DRIVER_EFI_GOP:
  	  params->have_vga = GRUB_VIDEO_LINUX_TYPE_EFIFB;
-@@ -398,6 +500,60 @@ grub_linux_boot_mmap_fill (grub_uint64_t addr, grub_uint64_t size,
+@@ -398,6 +501,63 @@ grub_linux_boot_mmap_fill (grub_uint64_t addr, grub_uint64_t size,
    return 0;
  }
  
@@ -372,7 +373,7 @@ index 9f74a96b19ae..18485e9b1766 100644
 +  /* A bit of work to extract the v2.08 EFI info from the linux params */
 +  efi_info = (void *)((grub_uint8_t *)&boot_params->v0208 + 2*sizeof(grub_uint32_t));
 +
-+  grub_slaunch_add_slrt_policy_entry (18,
++  grub_slaunch_add_slrt_policy_entry (GRUB_SLAUNCH_DATA_PCR,
 +                                      GRUB_SLR_ET_BOOT_PARAMS,
 +                                      /*flags=*/0,
 +                                      (grub_addr_t) boot_params,
@@ -380,15 +381,15 @@ index 9f74a96b19ae..18485e9b1766 100644
 +                                      "Measured boot parameters");
 +
 +  if (boot_params->setup_data)
-+      grub_slaunch_add_slrt_policy_entry (18,
++      grub_slaunch_add_slrt_policy_entry (GRUB_SLAUNCH_DATA_PCR,
 +                                          GRUB_SLR_ET_SETUP_DATA,
 +                                          GRUB_SLR_POLICY_IMPLICIT_SIZE,
 +                                          boot_params->setup_data,
 +                                          /*size=*/0,
 +                                          "Measured Kernel setup_data");
 +
-+  /* TODO the cmdline ptr can have hi bits but for now assume always < 4G */
-+  grub_slaunch_add_slrt_policy_entry (18,
++  /* The cmdline ptr can have hi bits but GRUB puts it always < 4G */
++  grub_slaunch_add_slrt_policy_entry (GRUB_SLAUNCH_DATA_PCR,
 +                                      GRUB_SLR_ET_CMDLINE,
 +                                      /*flags=*/0,
 +                                      boot_params->cmd_line_ptr,
@@ -399,7 +400,7 @@ index 9f74a96b19ae..18485e9b1766 100644
 +    {
 +      grub_uint64_t mmap_addr =
 +        ((grub_uint64_t) efi_info->efi_mmap_hi << 32) | efi_info->efi_mmap;
-+      grub_slaunch_add_slrt_policy_entry (18,
++      grub_slaunch_add_slrt_policy_entry (GRUB_SLAUNCH_DATA_PCR,
 +                                          GRUB_SLR_ET_UEFI_MEMMAP,
 +                                          /*flags=*/0,
 +                                          mmap_addr,
@@ -408,8 +409,11 @@ index 9f74a96b19ae..18485e9b1766 100644
 +    }
 +
 +  if (boot_params->ramdisk_image)
-+      /* TODO the initrd image and size can have hi bits but for now assume always < 4G */
-+      grub_slaunch_add_slrt_policy_entry (17,
++      /*
++       * The initrd image and size can have hi bits but in GRUB it is always
++       * < 4G, see GRUB_LINUX_INITRD_MAX_ADDRESS in grub_cmd_initrd().
++       */
++      grub_slaunch_add_slrt_policy_entry (GRUB_SLAUNCH_CODE_PCR,
 +                                          GRUB_SLR_ET_RAMDISK,
 +                                          /*flags=*/0,
 +                                          boot_params->ramdisk_image,
@@ -420,7 +424,7 @@ index 9f74a96b19ae..18485e9b1766 100644
  static grub_err_t
  grub_linux_boot (void)
  {
-@@ -411,6 +567,8 @@ grub_linux_boot (void)
+@@ -411,6 +571,8 @@ grub_linux_boot (void)
    };
    grub_size_t mmap_size;
    grub_size_t cl_offset;
@@ -429,7 +433,7 @@ index 9f74a96b19ae..18485e9b1766 100644
  
  #ifdef GRUB_MACHINE_IEEE1275
    {
-@@ -543,6 +701,9 @@ grub_linux_boot (void)
+@@ -543,6 +705,9 @@ grub_linux_boot (void)
  		(unsigned) ctx.real_size,
  		(unsigned) efi_mmap_size);
  
@@ -439,16 +443,17 @@ index 9f74a96b19ae..18485e9b1766 100644
    if (! ctx.real_mode_target)
      return grub_error (GRUB_ERR_OUT_OF_MEMORY, "cannot allocate real mode pages");
  
-@@ -550,7 +711,7 @@ grub_linux_boot (void)
+@@ -550,7 +715,8 @@ grub_linux_boot (void)
      grub_relocator_chunk_t ch;
      grub_size_t sz;
  
 -    if (grub_add (ctx.real_size, efi_mmap_size, &sz))
-+    if (grub_add (ctx.real_size, efi_mmap_size + ap_wake_block_size, &sz))
++    if (grub_add (efi_mmap_size, ap_wake_block_size, &sz) ||
++	grub_add (ctx.real_size, sz, &sz))
        return GRUB_ERR_OUT_OF_RANGE;
  
      err = grub_relocator_alloc_chunk_addr (relocator, &ch,
-@@ -561,6 +722,20 @@ grub_linux_boot (void)
+@@ -561,6 +727,20 @@ grub_linux_boot (void)
    }
    efi_mmap_buf = (grub_uint8_t *) real_mode_mem + ctx.real_size;
  
@@ -469,7 +474,7 @@ index 9f74a96b19ae..18485e9b1766 100644
    grub_dprintf ("linux", "real_mode_mem = %p\n",
                  real_mode_mem);
  
-@@ -587,13 +762,15 @@ grub_linux_boot (void)
+@@ -587,13 +767,15 @@ grub_linux_boot (void)
  
      ctx.params->secure_boot = grub_efi_get_secureboot ();
  
@@ -487,7 +492,7 @@ index 9f74a96b19ae..18485e9b1766 100644
        + ((grub_uint8_t *) efi_mmap_buf - (grub_uint8_t *) real_mode_mem);
      /* Pass EFI parameters.  */
      if (grub_le_to_cpu16 (ctx.params->version) >= 0x0208)
-@@ -624,12 +801,36 @@ grub_linux_boot (void)
+@@ -624,12 +806,36 @@ grub_linux_boot (void)
    }
  #endif
  
@@ -530,7 +535,7 @@ index 9f74a96b19ae..18485e9b1766 100644
    return grub_relocator32_boot (relocator, state, 0);
  }
  
-@@ -650,12 +851,13 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
+@@ -650,12 +856,13 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
    grub_file_t file = 0;
    struct linux_i386_kernel_header lh;
    grub_uint8_t setup_sects;
@@ -545,7 +550,7 @@ index 9f74a96b19ae..18485e9b1766 100644
  
    grub_dl_ref (my_mod);
  
-@@ -743,7 +945,7 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
+@@ -743,7 +950,7 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
        align = 0;
        relocatable = 0;
      }
@@ -554,7 +559,7 @@ index 9f74a96b19ae..18485e9b1766 100644
    if (grub_le_to_cpu16 (lh.version) >= 0x020a)
      {
        min_align = lh.min_alignment;
-@@ -760,6 +962,13 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
+@@ -760,6 +967,13 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
        prot_init_space = page_align (prot_size) * 3;
      }
  
@@ -568,7 +573,7 @@ index 9f74a96b19ae..18485e9b1766 100644
    if (allocate_pages (prot_size, &align,
  		      min_align, relocatable,
  		      preferred_address))
-@@ -767,6 +976,9 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
+@@ -767,6 +981,9 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
  
    grub_memset (&linux_params, 0, sizeof (linux_params));
  
@@ -578,14 +583,14 @@ index 9f74a96b19ae..18485e9b1766 100644
    /*
     * The Linux 32-bit boot protocol defines the setup header end
     * to be at 0x202 + the byte value at 0x201.
-@@ -793,6 +1005,79 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
+@@ -793,6 +1010,79 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
        goto fail;
      }
  
 +  /* Read the kernel_info struct. */
 +  if (grub_le_to_cpu16 (lh.version) >= 0x020f)
 +    {
-+      if (grub_file_seek (file, grub_le_to_cpu32 (lh.kernel_info_offset) +
++      if (grub_file_seek (file, (grub_off_t) grub_le_to_cpu32 (lh.kernel_info_offset) +
 +				real_size + GRUB_DISK_SECTOR_SIZE) == ((grub_off_t) -1))
 +	goto fail;
 +
@@ -681,10 +686,10 @@ index 37550155df78..cd8213a05d31 100644
      .esi = 0
 diff --git a/grub-core/loader/i386/slaunch.c b/grub-core/loader/i386/slaunch.c
 new file mode 100644
-index 000000000000..606152edb14d
+index 000000000000..b15194c78b61
 --- /dev/null
 +++ b/grub-core/loader/i386/slaunch.c
-@@ -0,0 +1,299 @@
+@@ -0,0 +1,304 @@
 +/*
 + *  GRUB  --  GRand Unified Bootloader
 + *  Copyright (C) 2020  Oracle and/or its affiliates.
@@ -785,7 +790,7 @@ index 000000000000..606152edb14d
 +void grub_slaunch_add_slrt_policy_entries (void)
 +{
 +  /* The SLR table should be measured too, at least parts of it. */
-+  grub_slaunch_add_slrt_policy_entry (18,
++  grub_slaunch_add_slrt_policy_entry (GRUB_SLAUNCH_DATA_PCR,
 +                                      GRUB_SLR_ET_SLRT,
 +                                      GRUB_SLR_POLICY_IMPLICIT_SIZE,
 +                                      slparams.slr_table_base,
@@ -806,7 +811,7 @@ index 000000000000..606152edb14d
 +             sizeof(struct grub_slr_entry_policy) +
 +             slr_policy_staging->nr_entries*sizeof(*entry));
 +
-+  if (slr_policy_staging->hdr.size + sizeof(*entry) > sizeof(slr_policy_buf))
++  if (slr_policy_staging->hdr.size > sizeof(slr_policy_buf) - sizeof(*entry))
 +      grub_fatal("Not enough space for adding policy entry: %s!  The buffer is full.",
 +                 evt_info);
 +
@@ -874,8 +879,8 @@ index 000000000000..606152edb14d
 +  grub_file_t file;
 +  grub_ssize_t size;
 +
-+  if (!argc)
-+    return grub_error (GRUB_ERR_BAD_ARGUMENT, N_("filename expected"));
++  if (argc != 1)
++    return grub_error (GRUB_ERR_BAD_ARGUMENT, N_("one argument expected: filename"));
 +
 +  if (slp == SLP_NONE)
 +    return grub_error (GRUB_ERR_BAD_ARGUMENT, N_("secure launch not enabled"));
@@ -977,9 +982,14 @@ index 000000000000..606152edb14d
 +
 +GRUB_MOD_FINI (slaunch)
 +{
-+  grub_unregister_command (cmd_slaunch_state);
-+  grub_unregister_command (cmd_slaunch_module);
-+  grub_unregister_command (cmd_slaunch);
++  if (cmd_slaunch_state)
++    grub_unregister_command (cmd_slaunch_state);
++
++  if (cmd_slaunch_module)
++    grub_unregister_command (cmd_slaunch_module);
++
++  if (cmd_slaunch)
++    grub_unregister_command (cmd_slaunch);
 +
 +  if (slp == SLP_INTEL_TXT)
 +    grub_txt_shutdown ();
@@ -1050,7 +1060,7 @@ index 31567483ccfc..f08fcda74115 100644
  
      /* --skip-sig is specified.  */
 diff --git a/include/grub/i386/linux.h b/include/grub/i386/linux.h
-index eddf9251d9a5..798188c85454 100644
+index eddf9251d9a5..18c860e6b759 100644
 --- a/include/grub/i386/linux.h
 +++ b/include/grub/i386/linux.h
 @@ -148,6 +148,17 @@ struct linux_i386_kernel_header
@@ -1063,11 +1073,11 @@ index eddf9251d9a5..798188c85454 100644
 +struct linux_kernel_info
 +{
 +  grub_uint32_t header;
-+  grub_uint32_t size;
-+  grub_uint32_t size_total;
++  grub_uint32_t size;		/* In bytes, excluding var_len_data[] */
++  grub_uint32_t size_total;	/* In bytes, including var_len_data[] */
 +  grub_uint32_t setup_type_max;
 +  grub_uint32_t mle_header_offset;
-+  grub_uint8_t  var_len_data[0];
++  grub_uint8_t  var_len_data[];
  } GRUB_PACKED;
  
  /* Boot parameters for Linux based on 2.6.12. This is used by the setup

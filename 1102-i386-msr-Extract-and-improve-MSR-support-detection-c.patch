@@ -1,4 +1,4 @@
-From e0f617c89e3a03cba4b5e48ffac8ef76cc7c0838 Mon Sep 17 00:00:00 2001
+From 52d63e5e45eaf8df9a81a453459fd89fbf898969 Mon Sep 17 00:00:00 2001
 From: Daniel Kiper <daniel.kiper@oracle.com>
 Date: Sat, 25 Apr 2020 16:43:52 +0200
 Subject: [PATCH] i386/msr: Extract and improve MSR support detection code

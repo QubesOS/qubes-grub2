@@ -1,4 +1,4 @@
-From bb8fe14ea78fbd7ad92b3d53c69e3b961eb8ccdd Mon Sep 17 00:00:00 2001
+From 462af28050122f87412237abd8000f3667a5d3be Mon Sep 17 00:00:00 2001
 From: Daniel Kiper <daniel.kiper@oracle.com>
 Date: Tue, 17 Dec 2019 20:02:37 +0100
 Subject: [PATCH] i386/msr: Rename grub_msr_read() and grub_msr_write()

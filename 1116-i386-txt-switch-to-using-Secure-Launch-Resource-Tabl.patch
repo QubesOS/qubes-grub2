@@ -1,4 +1,4 @@
-From 2974b3b9922043cedc6d8418eaeed2bcd1361ce1 Mon Sep 17 00:00:00 2001
+From f5ce8a71089c4cd2899e4f191aa0fc7ca3c79d79 Mon Sep 17 00:00:00 2001
 From: Ross Philipson <ross.philipson@oracle.com>
 Date: Fri, 13 Jan 2023 15:11:26 -0500
 Subject: [PATCH] i386/txt: switch to using Secure Launch Resource Table
@@ -13,7 +13,7 @@ Signed-off-by: Sergii Dmytruk <sergii.dmytruk@3mdeb.com>
  3 files changed, 121 insertions(+), 44 deletions(-)
 
 diff --git a/grub-core/loader/i386/txt/txt.c b/grub-core/loader/i386/txt/txt.c
-index ecc0c03580f6..03ba5130eaaa 100644
+index 44a0b5c01bf3..cc4db716d205 100644
 --- a/grub-core/loader/i386/txt/txt.c
 +++ b/grub-core/loader/i386/txt/txt.c
 @@ -60,6 +60,7 @@
@@ -33,7 +33,7 @@ index ecc0c03580f6..03ba5130eaaa 100644
  static grub_err_t
  enable_smx_mode (void)
  {
-@@ -250,33 +253,39 @@ grub_txt_prepare_cpu (void)
+@@ -249,33 +252,39 @@ grub_txt_prepare_cpu (void)
  }
  
  static void
@@ -83,7 +83,7 @@ index ecc0c03580f6..03ba5130eaaa 100644
  }
  
  static void
-@@ -546,6 +555,20 @@ grub_txt_init_tpm_event_log (void *buf, grub_size_t size)
+@@ -545,6 +554,20 @@ grub_txt_init_tpm_event_log (void *buf, grub_size_t size)
    elog->next_event_offset = sizeof(*elog);
  }
  
@@ -104,7 +104,7 @@ index ecc0c03580f6..03ba5130eaaa 100644
  /* Adds new element to the end. `size` does not include common header. */
  /* Assume that heap was cleared and there is enough space to add the element. */
  static inline struct grub_txt_heap_ext_data_element *
-@@ -591,6 +614,20 @@ init_txt_heap (struct grub_slaunch_params *slparams, struct grub_txt_acm_header
+@@ -590,6 +613,20 @@ init_txt_heap (struct grub_slaunch_params *slparams, struct grub_txt_acm_header
    size = (grub_uint64_t *) ((grub_addr_t) os_mle_data - sizeof (grub_uint64_t));
    *size = sizeof (*os_mle_data) + sizeof (grub_uint64_t);
  
@@ -125,7 +125,7 @@ index ecc0c03580f6..03ba5130eaaa 100644
    if (grub_add (grub_txt_bios_data_size (txt_heap), *size, &size_total) ||
        (size_total > grub_txt_get_heap_size ()))
      {
-@@ -603,16 +640,20 @@ init_txt_heap (struct grub_slaunch_params *slparams, struct grub_txt_acm_header
+@@ -602,16 +639,20 @@ init_txt_heap (struct grub_slaunch_params *slparams, struct grub_txt_acm_header
  
    os_mle_data->version = GRUB_SL_OS_MLE_STRUCT_VERSION;
    os_mle_data->boot_params_addr = slparams->boot_params_addr;
@@ -150,7 +150,7 @@ index ecc0c03580f6..03ba5130eaaa 100644
  
    /* OS/loader to SINIT data. */
    grub_dprintf ("slaunch", "Get supported OS SINIT data version\n");
-@@ -1000,9 +1041,10 @@ grub_err_t
+@@ -999,9 +1040,10 @@ grub_err_t
  grub_txt_boot_prepare (struct grub_slaunch_params *slparams)
  {
    grub_err_t err;
@@ -162,7 +162,7 @@ index ecc0c03580f6..03ba5130eaaa 100644
  
    sinit_base = grub_txt_sinit_select (grub_slaunch_module ());
  
-@@ -1018,24 +1060,22 @@ grub_txt_boot_prepare (struct grub_slaunch_params *slparams)
+@@ -1017,24 +1059,22 @@ grub_txt_boot_prepare (struct grub_slaunch_params *slparams)
    grub_dprintf ("slaunch", "TXT heap successfully prepared\n");
  
    /* Update the MLE header. */
@@ -196,7 +196,7 @@ index ecc0c03580f6..03ba5130eaaa 100644
  
    err = set_mtrrs_for_acmod (sinit_base);
    if (err)
-@@ -1054,3 +1094,20 @@ grub_txt_boot_prepare (struct grub_slaunch_params *slparams)
+@@ -1053,3 +1093,20 @@ grub_txt_boot_prepare (struct grub_slaunch_params *slparams)
  
    return GRUB_ERR_NONE;
  }
@@ -210,7 +210,7 @@ index ecc0c03580f6..03ba5130eaaa 100644
 +  txt_heap = grub_txt_get_heap ();
 +  os_mle_data = grub_txt_os_mle_data_start (txt_heap);
 +
-+  grub_slaunch_add_slrt_policy_entry (18,
++  grub_slaunch_add_slrt_policy_entry (GRUB_SLAUNCH_DATA_PCR,
 +                                      GRUB_SLR_ET_TXT_OS2MLE,
 +                                      /*flags=*/0,
 +                                      (grub_addr_t) os_mle_data,
@@ -218,10 +218,10 @@ index ecc0c03580f6..03ba5130eaaa 100644
 +                                      "Measured TXT OS-MLE data");
 +}
 diff --git a/include/grub/i386/slaunch.h b/include/grub/i386/slaunch.h
-index 3ee5c9bc1750..4b43662bea2f 100644
+index 93a491e4fc9e..a694260cbeea 100644
 --- a/include/grub/i386/slaunch.h
 +++ b/include/grub/i386/slaunch.h
-@@ -27,6 +27,19 @@
+@@ -31,6 +31,19 @@
  
  #define GRUB_SLAUNCH_TPM_EVT_LOG_SIZE	(8 * GRUB_PAGE_SIZE)
  
@@ -241,7 +241,7 @@ index 3ee5c9bc1750..4b43662bea2f 100644
  #ifndef ASM_FILE
  
  #include <grub/types.h>
-@@ -34,11 +47,16 @@
+@@ -38,11 +51,16 @@
  struct grub_slaunch_params
  {
    grub_uint32_t boot_params_addr;
@@ -259,7 +259,7 @@ index 3ee5c9bc1750..4b43662bea2f 100644
    grub_uint32_t mle_header_offset;
    grub_uint32_t ap_wake_block;
    grub_uint32_t ap_wake_block_size;
-@@ -52,6 +70,16 @@ extern grub_uint32_t grub_slaunch_platform_type (void);
+@@ -56,6 +74,16 @@ extern grub_uint32_t grub_slaunch_platform_type (void);
  extern void *grub_slaunch_module (void);
  extern struct grub_slaunch_params *grub_slaunch_params (void);
  
@@ -277,10 +277,10 @@ index 3ee5c9bc1750..4b43662bea2f 100644
  
  #endif /* GRUB_I386_SLAUNCH_H */
 diff --git a/include/grub/i386/txt.h b/include/grub/i386/txt.h
-index 5e3e6086d0d7..ba98043a1735 100644
+index 155ebab0ff6a..c3dde57ea849 100644
 --- a/include/grub/i386/txt.h
 +++ b/include/grub/i386/txt.h
-@@ -352,29 +352,14 @@ struct grub_txt_bios_data
+@@ -353,29 +353,14 @@ struct grub_txt_bios_data
  /* GRUB SLAUNCH specific definitions OS-MLE data */
  #define GRUB_SL_OS_MLE_STRUCT_VERSION	1
  
@@ -312,7 +312,7 @@ index 5e3e6086d0d7..ba98043a1735 100644
    grub_uint8_t mle_scratch[64];
  } GRUB_PACKED;
  
-@@ -751,6 +736,13 @@ extern void grub_txt_setup_mle_ptab (struct grub_slaunch_params *slparams);
+@@ -729,6 +714,13 @@ extern void grub_txt_setup_mle_ptab (struct grub_slaunch_params *slparams);
  extern grub_err_t grub_txt_init (void);
  extern void grub_txt_shutdown (void);
  extern void grub_txt_state_show (void);

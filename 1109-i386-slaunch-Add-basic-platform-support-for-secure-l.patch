@@ -1,4 +1,4 @@
-From f6a4ec51420020d205add6a8a95d13cd1b5a2be5 Mon Sep 17 00:00:00 2001
+From 615f29aac919a2fdaa6f9187569c8854ca1acf03 Mon Sep 17 00:00:00 2001
 From: Ross Philipson <ross.philipson@oracle.com>
 Date: Wed, 7 Aug 2019 13:50:14 -0400
 Subject: [PATCH] i386/slaunch: Add basic platform support for secure launch
@@ -14,8 +14,8 @@ Signed-off-by: Krystian Hebel <krystian.hebel@3mdeb.com>
  include/grub/i386/crfr.h    | 127 ++++++++++++++++++++++++++++++++++++
  include/grub/i386/mmio.h    |  72 ++++++++++++++++++++
  include/grub/i386/msr.h     |  63 ++++++++++++++++++
- include/grub/i386/slaunch.h |  58 ++++++++++++++++
- 5 files changed, 332 insertions(+)
+ include/grub/i386/slaunch.h |  62 ++++++++++++++++++
+ 5 files changed, 336 insertions(+)
  create mode 100644 include/grub/i386/crfr.h
  create mode 100644 include/grub/i386/mmio.h
  create mode 100644 include/grub/i386/slaunch.h
@@ -342,10 +342,10 @@ index 1e838c022f41..52c923ab94ac 100644
  #endif /* GRUB_I386_MSR_H */
 diff --git a/include/grub/i386/slaunch.h b/include/grub/i386/slaunch.h
 new file mode 100644
-index 000000000000..f7160d5fab0c
+index 000000000000..7f7709cda75e
 --- /dev/null
 +++ b/include/grub/i386/slaunch.h
-@@ -0,0 +1,58 @@
+@@ -0,0 +1,62 @@
 +/*
 + *  GRUB  --  GRand Unified Bootloader
 + *  Copyright (C) 2020  Oracle and/or its affiliates.
@@ -372,6 +372,10 @@ index 000000000000..f7160d5fab0c
 +/* Secure launch platform types. */
 +#define SLP_NONE	0
 +#define SLP_INTEL_TXT	1
++
++/* PCRs used by Secure launch. */
++#define GRUB_SLAUNCH_CODE_PCR	17
++#define GRUB_SLAUNCH_DATA_PCR	18
 +
 +#define GRUB_SLAUNCH_TPM_EVT_LOG_SIZE	(8 * GRUB_PAGE_SIZE)
 +

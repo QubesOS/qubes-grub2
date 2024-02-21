@@ -1,4 +1,4 @@
-From 66b9d72c3119ab93b7529074010aefb3ad3d8bb4 Mon Sep 17 00:00:00 2001
+From 58c9a06983cb68f04548713208b25c0b579b4043 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Micha=C5=82=20=C5=BBygowski?= <michal.zygowski@3mdeb.com>
 Date: Thu, 1 Sep 2022 17:58:53 +0200
 Subject: [PATCH] multiboot2: Implement TXT slaunch support

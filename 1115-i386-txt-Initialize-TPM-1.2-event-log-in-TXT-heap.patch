@@ -1,4 +1,4 @@
-From 66f7719aeccd92a418533444afdf771b0d1df6a4 Mon Sep 17 00:00:00 2001
+From f13b0f94d0ffc26bd936d25233ecbd20d5e5b866 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Micha=C5=82=20=C5=BBygowski?= <michal.zygowski@3mdeb.com>
 Date: Wed, 31 Aug 2022 14:37:49 +0200
 Subject: [PATCH] i386/txt: Initialize TPM 1.2 event log in TXT heap
@@ -14,10 +14,10 @@ Signed-off-by: Krystian Hebel <krystian.hebel@3mdeb.com>
  2 files changed, 91 insertions(+), 2 deletions(-)
 
 diff --git a/grub-core/loader/i386/txt/txt.c b/grub-core/loader/i386/txt/txt.c
-index 24311c0cf2bd..ecc0c03580f6 100644
+index b92107d50ea3..44a0b5c01bf3 100644
 --- a/grub-core/loader/i386/txt/txt.c
 +++ b/grub-core/loader/i386/txt/txt.c
-@@ -520,6 +520,32 @@ set_mtrrs_for_acmod (struct grub_txt_acm_header *hdr)
+@@ -519,6 +519,32 @@ set_mtrrs_for_acmod (struct grub_txt_acm_header *hdr)
    return err;
  }
  
@@ -50,7 +50,7 @@ index 24311c0cf2bd..ecc0c03580f6 100644
  /* Adds new element to the end. `size` does not include common header. */
  /* Assume that heap was cleared and there is enough space to add the element. */
  static inline struct grub_txt_heap_ext_data_element *
-@@ -658,6 +684,8 @@ init_txt_heap (struct grub_slaunch_params *slparams, struct grub_txt_acm_header
+@@ -657,6 +683,8 @@ init_txt_heap (struct grub_slaunch_params *slparams, struct grub_txt_acm_header
  
    sinit_caps = grub_txt_get_sinit_capabilities (sinit);
  
@@ -59,7 +59,7 @@ index 24311c0cf2bd..ecc0c03580f6 100644
    /*
     * In the latest TXT Software Development Guide as of now (April 2023,
     * Revision 017.4) bits 4 and 5 (used to be "no legacy PCR usage" and
-@@ -672,6 +700,25 @@ init_txt_heap (struct grub_slaunch_params *slparams, struct grub_txt_acm_header
+@@ -671,6 +699,25 @@ init_txt_heap (struct grub_slaunch_params *slparams, struct grub_txt_acm_header
     */
    os_sinit_data->capabilities = GRUB_TXT_CAPS_TPM_12_AUTH_PCR_USAGE;
  
@@ -85,7 +85,7 @@ index 24311c0cf2bd..ecc0c03580f6 100644
    /*
     * APs (application processors) can't be brought up by usual INIT-SIPI-SIPI
     * sequence after Measured Launch, otherwise the MLE integrity is lost.
-@@ -688,10 +735,21 @@ init_txt_heap (struct grub_slaunch_params *slparams, struct grub_txt_acm_header
+@@ -687,10 +734,21 @@ init_txt_heap (struct grub_slaunch_params *slparams, struct grub_txt_acm_header
      os_sinit_data->capabilities |= GRUB_TXT_CAPS_ECX_PT_SUPPORT;
  
    if (grub_get_tpm_ver () == GRUB_TPM_12)
@@ -110,7 +110,7 @@ index 24311c0cf2bd..ecc0c03580f6 100644
  	return grub_error (GRUB_ERR_BAD_ARGUMENT,
  			   N_("original TXT TPM 2.0 event log format is not supported"));
 diff --git a/include/grub/i386/txt.h b/include/grub/i386/txt.h
-index d8598e259a77..5e3e6086d0d7 100644
+index a7ddd3a66702..155ebab0ff6a 100644
 --- a/include/grub/i386/txt.h
 +++ b/include/grub/i386/txt.h
 @@ -22,6 +22,7 @@
@@ -121,7 +121,7 @@ index d8598e259a77..5e3e6086d0d7 100644
  #include <grub/types.h>
  #include <grub/i386/memory.h>
  #include <grub/i386/mmio.h>
-@@ -701,6 +702,34 @@ struct grub_smx_parameters
+@@ -679,6 +680,34 @@ struct grub_smx_parameters
    grub_uint32_t txt_feature_ext_flags;
  } GRUB_PACKED;
  
@@ -156,7 +156,7 @@ index d8598e259a77..5e3e6086d0d7 100644
  extern grub_uint32_t grub_txt_supported_os_sinit_data_ver (struct grub_txt_acm_header* hdr);
  
  extern grub_uint32_t grub_txt_get_sinit_capabilities (struct grub_txt_acm_header* hdr);
-@@ -714,6 +743,8 @@ extern struct grub_txt_acm_header* grub_txt_sinit_select (struct grub_txt_acm_he
+@@ -692,6 +721,8 @@ extern struct grub_txt_acm_header* grub_txt_sinit_select (struct grub_txt_acm_he
  extern grub_err_t grub_txt_verify_platform (void);
  extern grub_err_t grub_txt_prepare_cpu (void);
  

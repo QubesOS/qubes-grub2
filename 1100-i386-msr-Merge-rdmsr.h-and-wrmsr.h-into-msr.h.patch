@@ -1,4 +1,4 @@
-From 1614664a12563b23b2efd3b0c7b59a9c4ad10484 Mon Sep 17 00:00:00 2001
+From b965e567652ec8eb8bde2cd6f79b4ef02fdb0fa4 Mon Sep 17 00:00:00 2001
 From: Daniel Kiper <daniel.kiper@oracle.com>
 Date: Tue, 17 Dec 2019 17:51:29 +0100
 Subject: [PATCH] i386/msr: Merge rdmsr.h and wrmsr.h into msr.h

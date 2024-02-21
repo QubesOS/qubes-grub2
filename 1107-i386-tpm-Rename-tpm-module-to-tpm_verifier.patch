@@ -1,4 +1,4 @@
-From a14dcf40c6eddc23c90a2486eb2665433824a4e2 Mon Sep 17 00:00:00 2001
+From 01e5b0008d4031ef8612cfc387c7a66d2d4331c6 Mon Sep 17 00:00:00 2001
 From: Daniel Kiper <daniel.kiper@oracle.com>
 Date: Wed, 22 Apr 2020 21:41:24 +0200
 Subject: [PATCH] i386/tpm: Rename tpm module to tpm_verifier

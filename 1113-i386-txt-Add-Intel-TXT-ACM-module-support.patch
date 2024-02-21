@@ -1,4 +1,4 @@
-From f19c86b0de973bac58296596d394f2daaea7b561 Mon Sep 17 00:00:00 2001
+From 0ce784f00a21af6b379ece3e2c681fa47b945a5d Mon Sep 17 00:00:00 2001
 From: Ross Philipson <ross.philipson@oracle.com>
 Date: Wed, 7 Aug 2019 13:59:18 -0400
 Subject: [PATCH] i386/txt: Add Intel TXT ACM module support
@@ -7,16 +7,16 @@ Signed-off-by: Ross Philipson <ross.philipson@oracle.com>
 Signed-off-by: Daniel Kiper <daniel.kiper@oracle.com>
 Signed-off-by: Krystian Hebel <krystian.hebel@3mdeb.com>
 ---
- grub-core/loader/i386/txt/acmod.c | 610 ++++++++++++++++++++++++++++++
- 1 file changed, 610 insertions(+)
+ grub-core/loader/i386/txt/acmod.c | 600 ++++++++++++++++++++++++++++++
+ 1 file changed, 600 insertions(+)
  create mode 100644 grub-core/loader/i386/txt/acmod.c
 
 diff --git a/grub-core/loader/i386/txt/acmod.c b/grub-core/loader/i386/txt/acmod.c
 new file mode 100644
-index 000000000000..2605570a6c4f
+index 000000000000..6a8338abfde5
 --- /dev/null
 +++ b/grub-core/loader/i386/txt/acmod.c
-@@ -0,0 +1,610 @@
+@@ -0,0 +1,600 @@
 +/*
 + * acmod.c: support functions for use of Intel(r) TXT Authenticated
 + *          Code (AC) Modules
@@ -207,13 +207,8 @@ index 000000000000..2605570a6c4f
 +      return NULL;
 +    }
 +
-+  /* Overflows? */
-+  if ( grub_add (info_table->chipset_id_list,
-+		 sizeof(struct grub_txt_acm_chipset_id_list), &id_entries_off))
-+    {
-+      grub_error (GRUB_ERR_OUT_OF_RANGE, N_("ACM chipset ID entries out of bounds"));
-+      return NULL;
-+    }
++  /* Overflows were checked by fits_in_acm() */
++  id_entries_off = info_table->chipset_id_list + sizeof(*chipset_id_list);
 +
 +  if ( n_fit_in_acm( hdr, id_entries_off, sizeof(struct grub_txt_acm_chipset_id),
 +		      chipset_id_list->count ) == NULL )
@@ -254,13 +249,8 @@ index 000000000000..2605570a6c4f
 +      return NULL;
 +    }
 +
-+  /* Overflows? */
-+  if ( grub_add (info_table->processor_id_list, sizeof(*proc_id_list),
-+                 &id_entries_off))
-+    {
-+      grub_error (GRUB_ERR_OUT_OF_RANGE, N_("ACM processor ID entries out of bounds"));
-+      return NULL;
-+    }
++  /* Overflows were checked by fits_in_acm() */
++  id_entries_off = info_table->processor_id_list + sizeof(*proc_id_list);
 +
 +  if ( n_fit_in_acm ( hdr, id_entries_off, sizeof(*proc_id_list),
 +		     proc_id_list->count ) == NULL )
@@ -313,7 +303,7 @@ index 000000000000..2605570a6c4f
 +   * of info table.
 +   */
 +  if ( info_table->length < sizeof(*info_table) )
-+    grub_dprintf ("slaunch", "Info table size (%x) smaller than expected ("
++    grub_dprintf ("slaunch", "Info table size (%x) smaller than expected (%"
 +		  PRIxGRUB_SIZE ")\n",
 +		  info_table->length, sizeof(*info_table));
 +
@@ -444,11 +434,11 @@ index 000000000000..2605570a6c4f
 +    return 0;
 +
 +  /* Get chipset fusing, device, and vendor id info */
-+  didvid.value = grub_txt_reg_pub_readq (GRUB_TXT_DIDVID);
++  didvid.value = grub_txt_reg_pub_read64 (GRUB_TXT_DIDVID);
 +
-+  ver = grub_txt_reg_pub_readl (GRUB_TXT_VER_QPIIF);
++  ver = grub_txt_reg_pub_read32 (GRUB_TXT_VER_QPIIF);
 +  if ( ver == 0xffffffff || ver == 0x00 ) /* Old CPU, need to use VER.FSBIF */
-+    ver = grub_txt_reg_pub_readl (GRUB_TXT_VER_FSBIF);
++    ver = grub_txt_reg_pub_read32 (GRUB_TXT_VER_FSBIF);
 +
 +  grub_dprintf ("slaunch", "chipset production fused: %s, "
 +		"chipset vendor: 0x%x, device: 0x%x, revision: 0x%x\n",
@@ -559,8 +549,8 @@ index 000000000000..2605570a6c4f
 +  void *sinit_region_base;
 +  grub_uint32_t sinit_size, sinit_region_size;
 +
-+  sinit_region_base = (void *)(grub_addr_t) grub_txt_reg_pub_readl (GRUB_TXT_SINIT_BASE);
-+  sinit_region_size = (grub_uint32_t) grub_txt_reg_pub_readl (GRUB_TXT_SINIT_SIZE);
++  sinit_region_base = (void *)(grub_addr_t) grub_txt_reg_pub_read32 (GRUB_TXT_SINIT_BASE);
++  sinit_region_size = (grub_uint32_t) grub_txt_reg_pub_read32 (GRUB_TXT_SINIT_SIZE);
 +
 +  grub_dprintf ("slaunch", "TXT.SINIT.BASE: %p\nTXT.SINIT.SIZE: 0x%"
 +		PRIxGRUB_UINT32_T "\n", sinit_region_base, sinit_region_size);

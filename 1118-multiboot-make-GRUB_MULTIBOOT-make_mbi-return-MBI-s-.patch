@@ -1,4 +1,4 @@
-From c483385a164d0b7e950dd85a6dfd73f84fe05a4c Mon Sep 17 00:00:00 2001
+From 4e6cb41ee5606159c9ec0f4b8239749645808901 Mon Sep 17 00:00:00 2001
 From: Sergii Dmytruk <sergii.dmytruk@3mdeb.com>
 Date: Wed, 22 Nov 2023 21:08:35 +0200
 Subject: [PATCH] multiboot: make GRUB_MULTIBOOT(make_mbi) return MBI's size

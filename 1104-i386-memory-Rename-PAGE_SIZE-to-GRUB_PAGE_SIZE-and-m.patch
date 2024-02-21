@@ -1,4 +1,4 @@
-From 4e9a66d61b076b01826af440f581bb0c26c58431 Mon Sep 17 00:00:00 2001
+From 881d5870cbf72f7b35282de1addb107ac3b8100b Mon Sep 17 00:00:00 2001
 From: Daniel Kiper <daniel.kiper@oracle.com>
 Date: Wed, 20 Nov 2019 12:52:16 +0100
 Subject: [PATCH] i386/memory: Rename PAGE_SIZE to GRUB_PAGE_SIZE and make it

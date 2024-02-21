@@ -1,4 +1,4 @@
-From 0cfc0a5385a0847f79c9225d9dd9522ef25efaad Mon Sep 17 00:00:00 2001
+From d0570055a9451163220d28e79ba3cf89fb2c1dfa Mon Sep 17 00:00:00 2001
 From: Daniel Kiper <daniel.kiper@oracle.com>
 Date: Mon, 4 May 2020 22:34:59 +0200
 Subject: [PATCH] mmap: Add grub_mmap_get_lowest() and grub_mmap_get_highest()
