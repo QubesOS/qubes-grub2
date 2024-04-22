@@ -773,6 +773,28 @@ Patch0215: 0215-efi-Print-an-error-if-boot-to-firmware-setup-is-not-.patch
 Patch1000: 1000-templates-linux_xen-fix-detecting-xsm-policy.patch
 Patch1001: 1001-Hide-os-prober-disabled-warning.patch
 
+# Intel TXT support patches
+Patch1100: 1100-i386-msr-Merge-rdmsr.h-and-wrmsr.h-into-msr.h.patch
+Patch1101: 1101-i386-msr-Rename-grub_msr_read-and-grub_msr_write.patch
+Patch1102: 1102-i386-msr-Extract-and-improve-MSR-support-detection-c.patch
+Patch1103: 1103-i386-memory-Rename-PAGE_SHIFT-to-GRUB_PAGE_SHIFT.patch
+Patch1104: 1104-i386-memory-Rename-PAGE_SIZE-to-GRUB_PAGE_SIZE-and-m.patch
+Patch1105: 1105-i386-memory-Define-GRUB_PAGE_MASK-constant-and-GRUB_.patch
+Patch1106: 1106-mmap-Add-grub_mmap_get_lowest-and-grub_mmap_get_high.patch
+Patch1107: 1107-i386-tpm-Rename-tpm-module-to-tpm_verifier.patch
+Patch1108: 1108-i386-tpm-Add-TPM-TIS-and-CRB-driver.patch
+Patch1109: 1109-i386-slaunch-Add-basic-platform-support-for-secure-l.patch
+Patch1110: 1110-i386-txt-Initial-commit-of-the-Secure-Launch-Resourc.patch
+Patch1111: 1111-i386-txt-Add-Intel-TXT-definitions-header-file.patch
+Patch1112: 1112-i386-txt-Add-Intel-TXT-core-implementation.patch
+Patch1113: 1113-i386-txt-Add-Intel-TXT-ACM-module-support.patch
+Patch1114: 1114-i386-txt-Add-Intel-TXT-verification-routines.patch
+Patch1115: 1115-i386-txt-Initialize-TPM-1.2-event-log-in-TXT-heap.patch
+Patch1116: 1116-i386-txt-switch-to-using-Secure-Launch-Resource-Tabl.patch
+Patch1117: 1117-i386-slaunch-Add-secure-launch-framework-and-command.patch
+Patch1118: 1118-multiboot-make-GRUB_MULTIBOOT-make_mbi-return-MBI-s-.patch
+Patch1119: 1119-multiboot2-Implement-TXT-slaunch-support.patch
+
 BuildRequires:	autoconf
 BuildRequires:	automake
 BuildRequires:	bison
