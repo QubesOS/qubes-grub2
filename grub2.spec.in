@@ -12,7 +12,7 @@
 
 %global efi_vendor qubes
 %global efi_esp_dir /boot/efi/EFI/%{efi_vendor}
-%global gnulibversion fixes
+%global gnulibversion 9f48fb992a3d7e96610c4ce8be969cff2d61a01b
 Name:		grub2
 Epoch:		1000
 Version:	@VERSION@
@@ -48,18 +48,25 @@ Source13:	99-grub-mkconfig.install
 %global _configure ../configure
 
 %if %{?_with_ccache: 1}%{?!_with_ccache: 0}
-%global cc_equals CC=/usr/%{_lib}/ccache/gcc
+%global ccpath /usr/%{_lib}/ccache/gcc
 %else
-%global cc_equals %{nil}
+%global ccpath %{__cc}
+%endif
+
+# gnulib actively ignores CFLAGS because it's terrible
+%if 0%{?fedora} > 39
+%global cc_equals "CC=%{ccpath} -fPIE -Wl,-z,noexecstack -Wl,--no-warn-rwx-segments"
+%else
+%global cc_equals "CC=%{ccpath} -fPIE -Wl,-z,noexecstack"
 %endif
 
 %global cflags_sed						\\\
 	sed							\\\
 		-e 's/-O. //g'					\\\
-		-e 's/-fplugin=annobin //g'			\\\
+		-e 's/-fplugin=annobin//g'			\\\
 		-e 's,-specs=[[:alnum:]/_-]*annobin[[:alnum:]_-]*,,g' \\\
 		-e 's/-fstack-protector[[:alpha:]-]\\+//g'	\\\
-		-e 's/-Wp,-D_FORTIFY_SOURCE=[[:digit:]]\\+//g'	\\\
+		-e 's/-[^ ]*D_FORTIFY_SOURCE=[[:digit:]][^ ]*\\+//g'	\\\
 		-e 's/--param=ssp-buffer-size=4//g'		\\\
 		-e 's/-mregparm=3/-mregparm=4/g'		\\\
 		-e 's/-fexceptions//g'				\\\
@@ -68,10 +75,15 @@ Source13:	99-grub-mkconfig.install
 		-e 's/^/ -fno-strict-aliasing /'		\\\
 		%{nil}
 
-%global host_cflags %{expand:%%(echo %{build_cflags} %{?_hardening_cflags} | %{cflags_sed})}
+%global host_cflags_ %{expand:%%(echo %{build_cflags} %{?_hardening_cflags} | %{cflags_sed})} -fstack-protector-strong
+%ifarch x86_64
+%global host_cflags %{host_cflags_} -fcf-protection
+%else
+%global host_cflags %{host_cflags_}
+%endif
 %global legacy_host_cflags					\\\
 	%{expand:%%(echo %{host_cflags} |			\\\
-	%{cflags_sed}						\\\
+	sed							\\\
 		-e 's/-m64//g'					\\\
 		-e 's/-mcpu=power[[:alnum:]]\\+/-mcpu=power6/g'	\\\
 	)}
@@ -88,6 +100,7 @@ Source13:	99-grub-mkconfig.install
 
 %global ldflags_sed						\\\
 	sed							\\\
+		-e 's,-specs=[[:alnum:]/_-]*annobin[[:alnum:]_-]*,,g' \\\
 		-e 's/^$//'					\\\
 		%{nil}
 
@@ -98,7 +111,11 @@ Source13:	99-grub-mkconfig.install
 	)}
 %global efi_host_ldflags %{expand:%%(echo %{host_ldflags})}
 
+%if 0%{?fedora} > 39
+%global target_ldflags %{expand:%%(echo %{build_ldflags} -Wl,--no-warn-rwx-segments -static | %{ldflags_sed})}
+%else
 %global target_ldflags %{expand:%%(echo %{build_ldflags} -static | %{ldflags_sed})}
+%endif
 %global legacy_target_ldflags					\\\
 	%{expand:%%(echo %{target_ldflags} | 			\\\
 	%{ldflags_sed}						\\\
@@ -362,6 +379,7 @@ git commit -a -q -m "%{tarversion} baseline."			\
 #git apply --index --whitespace=nowarn %{SOURCE3}		\
 #git commit -a -q -m "%{tarversion} master."			\
 git am --whitespace=nowarn %%{patches} </dev/null		\
+rm -r build-aux m4						\
 ./bootstrap							\
 %{nil}
 
@@ -708,65 +726,68 @@ Patch0014: 0014-Move-bash-completion-script-922997.patch
 Patch0015: 0015-Allow-fallback-to-include-entries-by-title-not-just-.patch
 Patch0017: 0017-Make-efi-machines-load-an-env-block-from-a-variable.patch
 Patch0019: 0019-Add-fw_path-variable-revised.patch
-Patch0024: 0024-Don-t-print-GNU-GRUB-header.patch
-Patch0032: 0032-Enable-pager-by-default.-985860.patch
-Patch0034: 0034-Don-t-say-GNU-Linux-in-generated-menus.patch
-Patch0037: 0037-Add-.eh_frame-to-list-of-relocations-stripped.patch
-Patch0038: 0038-Don-t-require-a-password-to-boot-entries-generated-b.patch
-Patch0040: 0040-Replace-a-lot-of-man-pages-with-slightly-nicer-ones.patch
-Patch0043: 0043-Generate-OS-and-CLASS-in-10_linux-from-etc-os-releas.patch
-Patch0047: 0047-Make-grub2-mkconfig-construct-titles-that-look-like-.patch
-Patch0048: 0048-Add-friendly-grub2-password-config-tool-985962.patch
-Patch0051: 0051-Add-grub-get-kernel-settings-and-use-it-in-10_linux.patch
-Patch0053: 0053-Make-grub_fatal-also-backtrace.patch
-Patch0055: 0055-Make-our-info-pages-say-grub2-where-appropriate.patch
-Patch0056: 0056-macos-just-build-chainloader-entries-don-t-try-any-x.patch
-Patch0057: 0057-grub2-btrfs-Add-ability-to-boot-from-subvolumes.patch
-Patch0058: 0058-export-btrfs_subvol-and-btrfs_subvolid.patch
-Patch0059: 0059-grub2-btrfs-03-follow_default.patch
-Patch0060: 0060-grub2-btrfs-04-grub2-install.patch
-Patch0061: 0061-grub2-btrfs-05-grub2-mkconfig.patch
-Patch0062: 0062-grub2-btrfs-06-subvol-mount.patch
-Patch0063: 0063-Fallback-to-old-subvol-name-scheme-to-support-old-sn.patch
-Patch0064: 0064-Grub-not-working-correctly-with-btrfs-snapshots-bsc-.patch
-Patch0071: 0071-20_linux_xen-load-xen-or-multiboot-2-modules-as-need.patch
-Patch0081: 0081-Make-it-possible-to-enabled-build-id-sha1.patch
-Patch0084: 0084-Fixup-for-newer-compiler.patch
-Patch0086: 0086-Fixup-for-newer-compiler.patch
-Patch0097: 0097-grub-editenv-Add-incr-command-to-increment-integer-v.patch
-Patch0098: 0098-Add-auto-hide-menu-support.patch
-Patch0099: 0099-Add-grub-set-bootflag-utility.patch
-Patch0100: 0100-docs-Add-grub-boot-indeterminate.service-example.patch
-Patch0101: 0101-gentpl-add-disable-support.patch
-Patch0102: 0102-gentpl-add-pc-firmware-type.patch
-Patch0105: 0105-Make-it-so-we-can-tell-configure-which-cflags-utils-.patch
-Patch0116: 0116-Attempt-to-fix-up-all-the-places-Wsign-compare-error.patch
-Patch0117: 0117-Don-t-use-Wno-sign-compare-Wno-conversion-Wno-error-.patch
-Patch0122: 0122-Fix-getroot.c-s-trampolines.patch
-Patch0123: 0123-Do-not-allow-stack-trampolines-anywhere.patch
-Patch0124: 0124-Reimplement-boot_counter.patch
-Patch0125: 0125-Fix-menu-entry-selection-based-on-ID-and-title.patch
-Patch0126: 0126-Make-the-menu-entry-users-option-argument-to-be-opti.patch
-Patch0127: 0127-Add-efi-export-env-and-efi-load-env-commands.patch
-Patch0128: 0128-Make-it-possible-to-subtract-conditions-from-debug.patch
-Patch0129: 0129-Export-all-variables-from-the-initial-context-when-c.patch
-Patch0130: 0130-grub.d-Split-out-boot-success-reset-from-menu-auto-h.patch
-Patch0136: 0136-Use-git-to-apply-gnulib-patches.patch
-Patch0138: 0138-grub-set-bootflag-Update-comment-about-running-as-ro.patch
-Patch0139: 0139-grub-set-bootflag-Write-new-env-to-tmpfile-and-then-.patch
-Patch0140: 0140-grub.d-Fix-boot_indeterminate-getting-set-on-boot_su.patch
-Patch0144: 0144-bootstrap.conf-Force-autogen.sh-to-use-python3.patch
-Patch0155: 0155-Fix-a-missing-return-in-efi-export-env-and-efi-load-.patch
-Patch0166: 0166-Add-systemd-integration-scripts-to-make-systemctl-re.patch
-Patch0167: 0167-systemd-integration.sh-Also-set-old-menu_show_once-g.patch
-Patch0168: 0168-at_keyboard-use-set-1-when-keyboard-is-in-Translate-.patch
-Patch0169: 0169-grub-install-disable-support-for-EFI-platforms.patch
-Patch0172: 0172-Introduce-function-grub_debug_is_enabled-void-return.patch
-Patch0173: 0173-Don-t-clear-screen-when-debugging-is-enabled.patch
-Patch0178: 0178-Add-at_keyboard_fallback_set-var-to-force-the-set-ma.patch
-Patch0210: 0210-Suppress-gettext-error-message.patch
-Patch0214: 0214-templates-Check-for-EFI-at-runtime-instead-of-config.patch
-Patch0215: 0215-efi-Print-an-error-if-boot-to-firmware-setup-is-not-.patch
+Patch0023: 0023-Enable-pager-by-default.-985860.patch
+Patch0024: 0024-Don-t-say-GNU-Linux-in-generated-menus.patch
+Patch0025: 0025-Add-.eh_frame-to-list-of-relocations-stripped.patch
+Patch0026: 0026-Don-t-require-a-password-to-boot-entries-generated-b.patch
+Patch0029: 0029-Generate-OS-and-CLASS-in-10_linux-from-etc-os-releas.patch
+Patch0032: 0032-Make-grub2-mkconfig-construct-titles-that-look-like-.patch
+Patch0033: 0033-Add-friendly-grub2-password-config-tool-985962.patch
+Patch0036: 0036-Add-grub-get-kernel-settings-and-use-it-in-10_linux.patch
+Patch0038: 0038-Make-grub_fatal-also-backtrace.patch
+Patch0039: 0039-Make-our-info-pages-say-grub2-where-appropriate.patch
+Patch0040: 0040-macos-just-build-chainloader-entries-don-t-try-any-x.patch
+Patch0041: 0041-grub2-btrfs-Add-ability-to-boot-from-subvolumes.patch
+Patch0042: 0042-export-btrfs_subvol-and-btrfs_subvolid.patch
+Patch0043: 0043-grub2-btrfs-03-follow_default.patch
+Patch0044: 0044-grub2-btrfs-04-grub2-install.patch
+Patch0045: 0045-grub2-btrfs-05-grub2-mkconfig.patch
+Patch0046: 0046-grub2-btrfs-06-subvol-mount.patch
+Patch0047: 0047-Fallback-to-old-subvol-name-scheme-to-support-old-sn.patch
+Patch0048: 0048-Grub-not-working-correctly-with-btrfs-snapshots-bsc-.patch
+Patch0055: 0055-20_linux_xen-load-xen-or-multiboot-2-modules-as-need.patch
+Patch0064: 0064-Make-it-possible-to-enabled-build-id-sha1.patch
+Patch0067: 0067-Fixup-for-newer-compiler.patch
+Patch0069: 0069-Fixup-for-newer-compiler.patch
+Patch0080: 0080-grub-editenv-Add-incr-command-to-increment-integer-v.patch
+Patch0081: 0081-Add-auto-hide-menu-support.patch
+Patch0082: 0082-Add-grub-set-bootflag-utility.patch
+Patch0083: 0083-docs-Add-grub-boot-indeterminate.service-example.patch
+Patch0084: 0084-gentpl-add-disable-support.patch
+Patch0085: 0085-gentpl-add-pc-firmware-type.patch
+Patch0088: 0088-Make-it-so-we-can-tell-configure-which-cflags-utils-.patch
+Patch0099: 0099-Attempt-to-fix-up-all-the-places-Wsign-compare-error.patch
+Patch0100: 0100-Don-t-use-Wno-sign-compare-Wno-conversion-Wno-error-.patch
+Patch0105: 0105-Fix-getroot.c-s-trampolines.patch
+Patch0106: 0106-Do-not-allow-stack-trampolines-anywhere.patch
+Patch0107: 0107-Reimplement-boot_counter.patch
+Patch0108: 0108-Fix-menu-entry-selection-based-on-ID-and-title.patch
+Patch0109: 0109-Make-the-menu-entry-users-option-argument-to-be-opti.patch
+Patch0110: 0110-Add-efi-export-env-and-efi-load-env-commands.patch
+Patch0111: 0111-Make-it-possible-to-subtract-conditions-from-debug.patch
+Patch0112: 0112-Export-all-variables-from-the-initial-context-when-c.patch
+Patch0113: 0113-grub.d-Split-out-boot-success-reset-from-menu-auto-h.patch
+Patch0115: 0115-grub-set-bootflag-Update-comment-about-running-as-ro.patch
+Patch0116: 0116-grub-set-bootflag-Write-new-env-to-tmpfile-and-then-.patch
+Patch0117: 0117-grub.d-Fix-boot_indeterminate-getting-set-on-boot_su.patch
+Patch0119: 0119-bootstrap.conf-Force-autogen.sh-to-use-python3.patch
+Patch0130: 0130-Fix-a-missing-return-in-efi-export-env-and-efi-load-.patch
+Patch0141: 0141-Add-systemd-integration-scripts-to-make-systemctl-re.patch
+Patch0142: 0142-systemd-integration.sh-Also-set-old-menu_show_once-g.patch
+Patch0143: 0143-at_keyboard-use-set-1-when-keyboard-is-in-Translate-.patch
+Patch0144: 0144-grub-install-disable-support-for-EFI-platforms.patch
+Patch0147: 0147-Introduce-function-grub_debug_is_enabled-void-return.patch
+Patch0148: 0148-Don-t-clear-screen-when-debugging-is-enabled.patch
+Patch0154: 0154-Add-at_keyboard_fallback_set-var-to-force-the-set-ma.patch
+Patch0181: 0181-Suppress-gettext-error-message.patch
+Patch0183: 0183-templates-Check-for-EFI-at-runtime-instead-of-config.patch
+Patch0184: 0184-efi-Print-an-error-if-boot-to-firmware-setup-is-not-.patch
+Patch0198: 0198-Use-visual-indentation-in-config.h.in.patch
+Patch0200: 0200-Drop-gnulib-fix-base64.patch.patch
+Patch0201: 0201-Drop-gnulib-no-abort.patch.patch
+Patch0202: 0202-Update-gnulib-version-and-drop-most-gnulib-patches.patch
+Patch0310: 0310-core-Fix-several-implicit-function-declarations.patch
+Patch0337: 0337-Fix-missing-include-in-ofdisk.c.patch
 ### end grub.patches
 
 # non-Fedora patches
@@ -797,10 +818,14 @@ Patch1119: 1119-multiboot2-Implement-TXT-slaunch-support.patch
 
 BuildRequires:	autoconf
 BuildRequires:	automake
+BuildRequires:	binutils
 BuildRequires:	bison
 BuildRequires:	bzip2-devel
+BuildRequires:	dejavu-sans-fonts
 BuildRequires:	device-mapper-devel
+BuildRequires:	efi-srpm-macros
 BuildRequires:	flex
+BuildRequires:	freetype-devel
 BuildRequires:	freetype-devel
 BuildRequires:	fuse-devel
 BuildRequires:	gcc
@@ -815,8 +840,8 @@ BuildRequires:	squashfs-tools
 BuildRequires:	texinfo
 BuildRequires:	xz-devel
 
-# For %%_userunitdir macro
-BuildRequires:	systemd
+# For %%_userunitdir and %%systemd_* macros
+BuildRequires:	systemd-rpm-macros
 
 %ifarch %{efi_arch}
 BuildRequires:	pesign >= 0.99-8
