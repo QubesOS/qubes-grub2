@@ -788,6 +788,7 @@ Patch0201: 0201-Drop-gnulib-no-abort.patch.patch
 Patch0202: 0202-Update-gnulib-version-and-drop-most-gnulib-patches.patch
 Patch0203: 0203-commands-search-Fix-bug-stopping-iteration-when-no-f.patch
 Patch0204: 0204-search-new-efidisk-only-option-on-EFI-systems.patch
+Patch0260: 0260-grub_fs_probe-dprint-errors-from-filesystems.patch
 Patch0310: 0310-core-Fix-several-implicit-function-declarations.patch
 Patch0337: 0337-Fix-missing-include-in-ofdisk.c.patch
 Patch0348: 0348-add-flag-to-only-search-root-dev.patch
