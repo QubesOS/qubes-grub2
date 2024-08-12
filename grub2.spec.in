@@ -779,6 +779,7 @@ Patch0144: 0144-grub-install-disable-support-for-EFI-platforms.patch
 Patch0147: 0147-Introduce-function-grub_debug_is_enabled-void-return.patch
 Patch0148: 0148-Don-t-clear-screen-when-debugging-is-enabled.patch
 Patch0154: 0154-Add-at_keyboard_fallback_set-var-to-force-the-set-ma.patch
+Patch0179: 0179-fs-ext2-Ignore-checksum-seed-incompat-feature.patch
 Patch0181: 0181-Suppress-gettext-error-message.patch
 Patch0183: 0183-templates-Check-for-EFI-at-runtime-instead-of-config.patch
 Patch0184: 0184-efi-Print-an-error-if-boot-to-firmware-setup-is-not-.patch
