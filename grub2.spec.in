@@ -1215,7 +1215,9 @@ if test -f ${EFI_HOME}/grubenv; then
 fi
 
 cp -a ${EFI_HOME}/grub.cfg ${EFI_HOME}/grub.cfg.rpmsave
-cp -a ${EFI_HOME}/grub.cfg ${GRUB_HOME}/
+if test ! -f ${GRUB_HOME}/grub.cfg; then
+    cp -a ${EFI_HOME}/grub.cfg ${GRUB_HOME}/
+fi
 mv ${EFI_HOME}/grub.cfg.stb ${EFI_HOME}/grub.cfg
 
 %files common -f grub.lang
