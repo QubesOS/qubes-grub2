@@ -688,7 +688,7 @@ ln -s ../boot/grub2/grub.cfg					\\\
 %ifarch %{arm}							\
 %attr(0700,root,root)%{efi_esp_boot}/BOOTARM.EFI		\
 %endif								\
-%dir %attr(0700,root,root)%{efi_esp_dir}/fonts			\
+%attr(0700,root,root)%{efi_esp_dir}/fonts			\
 %dir %attr(0700,root,root)/boot/loader/entries			\
 %ghost %config(noreplace) /boot/grub2/grub.cfg		\
 %ghost %config(noreplace) %attr(0700,root,root)%{efi_esp_dir}/grub.cfg	\
