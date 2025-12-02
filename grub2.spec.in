@@ -123,14 +123,6 @@ Source13:	99-grub-mkconfig.install
 %global grubefiarch %{nil}
 %global grublegacyarch %{nil}
 
-# sparc is always compiled 64 bit
-%ifarch %{sparc}
-%global target_cpu_name sparc64
-%global _target_platform %{target_cpu_name}-%{_vendor}-%{_target_os}%{?_gnu}
-%global legacy_target_cpu_name %{_arch}
-%global legacy_package_arch ieee1275
-%global platform ieee1275
-%endif
 # ppc is always compiled 64 bit
 %ifarch ppc ppc64 ppc64le
 # GRUB emu fails to build on ppc64le
@@ -1306,12 +1298,8 @@ mv ${EFI_HOME}/grub.cfg.stb ${EFI_HOME}/grub.cfg
 %exclude %{_sbindir}/grub2-bios-setup
 %exclude %{_datadir}/man/man8/grub2-bios-setup*
 %endif
-%ifarch %{sparc}
-%{_sbindir}/grub2-sparc64-setup
-%else
 %exclude %{_sbindir}/grub2-sparc64-setup
 %exclude %{_datadir}/man/man8/grub2-sparc64-setup*
-%endif
 %ifarch %{sparc} ppc ppc64 ppc64le
 %{_sbindir}/grub2-ofpathname
 %else
@@ -1326,12 +1314,8 @@ mv ${EFI_HOME}/grub.cfg.stb ${EFI_HOME}/grub.cfg
 %{_bindir}/grub2-mkfont
 %{_bindir}/grub2-mklayout
 %{_bindir}/grub2-mknetdir
-%ifnarch %{sparc}
 %{_bindir}/grub2-mkrescue
 %{_datadir}/man/man1/grub2-mkrescue*
-%else
-%exclude %{_datadir}/man/man1/grub2-mkrescue*
-%endif
 %{_bindir}/grub2-mkstandalone
 %{_bindir}/grub2-syslinux2cfg
 %{_sysconfdir}/sysconfig/grub
