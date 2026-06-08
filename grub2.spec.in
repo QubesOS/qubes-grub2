@@ -1220,6 +1220,8 @@ if test ! -f ${GRUB_HOME}/grub.cfg; then
 fi
 mv ${EFI_HOME}/grub.cfg.stb ${EFI_HOME}/grub.cfg
 
+%files
+
 %files common -f grub.lang
 %dir %{_libdir}/grub/
 %dir %{_datarootdir}/grub/
