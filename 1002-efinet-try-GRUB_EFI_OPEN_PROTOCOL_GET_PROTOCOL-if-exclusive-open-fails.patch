@@ -1,0 +1,45 @@
+From 7efce939751759953f501bff44795670f4784b9a Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Szymon=20=22accek=22=20Aceda=C5=84ski?=
+ <accek@invisiblethingslab.com>
+Date: Thu, 26 Feb 2026 12:31:31 +0100
+Subject: [PATCH] efinet: try GRUB_EFI_OPEN_PROTOCOL_GET_PROTOCOL if exclusive
+ open fails
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Signed-off-by: Szymon "accek" Acedański <accek@invisiblethingslab.com>
+---
+ grub-core/net/drivers/efi/efinet.c | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+
+diff --git a/grub-core/net/drivers/efi/efinet.c b/grub-core/net/drivers/efi/efinet.c
+index 4591d0757ecc..79881c08bacd 100644
+--- a/grub-core/net/drivers/efi/efinet.c
++++ b/grub-core/net/drivers/efi/efinet.c
+@@ -172,6 +172,22 @@ open_card (struct grub_net_card *dev)
+    */
+   net = grub_efi_open_protocol (dev->efi_handle, &net_io_guid,
+ 				GRUB_EFI_OPEN_PROTOCOL_BY_EXCLUSIVE);
++
++  if (net == NULL)
++    {
++      /*
++       * In some PXE + chainload scenarios the SNP handle is already opened
++       * and firmware refuses an exclusive reopen (often manifests as
++       * "%s: can't open protocol"). Fall back to a non-exclusive open so we
++       * can reuse the existing PXE-provided SNP instance.
++       *
++       * Note: We still prefer BY_EXCLUSIVE when it works, since it can
++       * implicitly tear down competing MNP instances.
++       */
++      net = grub_efi_open_protocol (dev->efi_handle, &net_io_guid,
++                                    GRUB_EFI_OPEN_PROTOCOL_GET_PROTOCOL);
++    }
++
+   if (net != NULL)
+     {
+       if (net->mode->state == GRUB_EFI_NETWORK_STOPPED
+-- 
+2.53.0
+
